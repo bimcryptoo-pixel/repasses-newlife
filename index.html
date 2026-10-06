@@ -184,19 +184,19 @@
 
 <!-- Modal KM / odômetro -->
 <div id="modalKm" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
-  <div class="card p-6 w-full max-w-md">
+  <div class="card p-4 sm:p-6 w-full max-w-md">
     <h3 class="font-bold text-lg mb-4">Registro de KM</h3>
     <input type="hidden" id="kmId">
     <div class="space-y-3">
-      <div class="grid grid-cols-2 gap-3">
-        <div><label class="text-xs text-gray-400">Data</label><input type="date" id="kmData" class="w-full mt-1"></div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><label class="text-xs text-gray-400">Data</label><input type="date" id="kmData" class="w-full mt-1 min-w-0"></div>
         <div><label class="text-xs text-gray-400">Motorista</label><select id="kmMot" class="w-full mt-1"></select></div>
       </div>
       <div><label class="text-xs text-gray-400">Cliente</label><select id="kmCliente" class="w-full mt-1"></select></div>
       <div><label class="text-xs text-gray-400">Odômetro do carro</label><input type="number" id="kmOdometro" step="0.1" min="0" class="w-full mt-1" placeholder="Ex: 45230">
-        <div class="flex items-center gap-2 mt-2">
-          <input type="file" id="odoFoto" accept="image/*" capture="environment" class="!p-1 text-xs" onchange="escolherFotoOdo(this)">
-          <button id="odoLer" class="btn-ghost text-xs whitespace-nowrap" disabled onclick="lerOdometro()">📷 Ler da foto</button>
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+          <input type="file" id="odoFoto" accept="image/*" capture="environment" class="!p-1 text-xs w-full min-w-0" onchange="escolherFotoOdo(this)">
+          <button id="odoLer" class="btn-ghost text-xs whitespace-nowrap w-full sm:w-auto shrink-0" disabled onclick="lerOdometro()">📷 Ler da foto</button>
         </div>
         <input type="hidden" id="kmFotoUrl">
         <div class="text-xs text-gray-500 mt-1">📎 A foto do odômetro será anexada ao registro.</div>
