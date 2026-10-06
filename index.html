@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEW LIFE - ATENDIMENTO · Controle de Repasses</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { --nl-red:#e63946; }
+  body { background:#0f1115; color:#e8eaf0; font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; }
+  .card { background:#171a21; border:1px solid #262b36; border-radius:12px; }
+  .btn-red { background:var(--nl-red); color:#fff; font-weight:600; border-radius:8px; padding:8px 16px; }
+  .btn-red:hover { filter:brightness(1.1); }
+  .btn-ghost { background:#22262f; color:#e8eaf0; border-radius:8px; padding:8px 16px; }
+  .btn-ghost:hover { background:#2b303c; }
+  input,select,textarea { background:#10131a !important; border:1px solid #2b303c !important; color:#e8eaf0 !important; border-radius:8px !important; padding:8px 12px !important; }
+  input:focus,select:focus { border-color:var(--nl-red) !important; outline:none; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#8b93a5; padding:10px 12px; border-bottom:1px solid #262b36; }
+  td { padding:10px 12px; border-bottom:1px solid #1c2029; font-size:14px; }
+  tr:hover td { background:#1a1e27; }
+  .tab { padding:10px 18px; border-radius:10px 10px 0 0; color:#8b93a5; font-weight:600; cursor:pointer; }
+  .tab.active { background:#171a21; color:#fff; border-bottom:3px solid var(--nl-red); }
+  .modal-bg { background:rgba(0,0,0,.65); }
+  .tab { white-space:nowrap; }
+  @media (max-width:640px){
+    .tab { padding:8px 12px; font-size:13px; }
+    th, td { padding:8px 8px; font-size:13px; }
+  }
+</style>
+</head>
+<body>
+<div id="telaAuth"></div>
+<div id="telaApp" class="hidden">
+<div class="max-w-6xl mx-auto p-4 md:p-6">
+
+  <!-- Cabeçalho -->
+  <div class="flex items-start justify-between gap-2 flex-wrap mb-4">
+    <div class="min-w-0">
+      <h1 class="text-xl md:text-2xl font-extrabold tracking-tight">NEW LIFE <span style="color:var(--nl-red)">·</span> ATENDIMENTO</h1>
+      <p class="text-sm text-gray-400">Controle de valor repassado × km reportado</p>
+    </div>
+    <div class="text-right text-xs text-gray-500">
+      <div id="userLbl" class="text-white font-semibold mb-1"></div>
+      <div>Taxa de referência: <b id="taxaLbl" class="text-white">R$ 0,70/km</b></div>
+      <button id="btnCfg" onclick="abrirConfig()" class="underline hover:text-white">alterar</button>
+      <span class="mx-1">·</span>
+      <button onclick="sair()" class="underline hover:text-white">sair</button>
+    </div>
+  </div>
+
+  <!-- Abas -->
+  <div class="flex gap-1 mb-0 overflow-x-auto">
+    <div class="tab active" id="tab-dash" onclick="trocarAba('dash')">📊 Resumo</div>
+    <div class="tab" id="tab-lanc" onclick="trocarAba('lanc')">🧾 Lançamentos</div>
+    <div class="tab" id="tab-mot" onclick="trocarAba('mot')">👥 Motoristas</div>
+    <div class="tab hidden" id="tab-usr" onclick="trocarAba('usr')">🔑 Usuários</div>
+    <div class="tab" id="tab-km" onclick="trocarAba('km')">🚗 KM</div>
+    <div class="tab hidden" id="tab-cli" onclick="trocarAba('cli')">📋 Clientes</div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card p-4 mb-4 rounded-t-none">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div><label class="text-xs text-gray-400">Mês</label><select id="fMes" class="w-full mt-1"></select></div>
+      <div><label class="text-xs text-gray-400">Ano</label><select id="fAno" class="w-full mt-1"></select></div>
+      <div><label class="text-xs text-gray-400">De</label><input type="date" id="fDe" class="w-full mt-1"></div>
+      <div><label class="text-xs text-gray-400">Até</label><input type="date" id="fAte" class="w-full mt-1"></div>
+      <div><label class="text-xs text-gray-400">Motorista</label><select id="fMot" class="w-full mt-1"><option value="">Todos</option></select></div>
+    </div>
+    <div class="flex gap-2 mt-3">
+      <button class="btn-red text-sm" onclick="aplicarFiltros()">Filtrar</button>
+      <button class="btn-ghost text-sm" onclick="limparFiltros()">Limpar</button>
+    </div>
+  </div>
+
+  <!-- ABA RESUMO -->
+  <div id="aba-dash">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div class="card p-4"><div class="text-xs text-gray-400">Valor repassado</div><div class="text-xl md:text-2xl font-bold" id="kpiValor">R$ 0,00</div></div>
+      <div class="card p-4"><div class="text-xs text-gray-400">Km reportado</div><div class="text-xl md:text-2xl font-bold" id="kpiKm">0 km</div></div>
+      <div class="card p-4"><div class="text-xs text-gray-400">R$/km médio</div><div class="text-xl md:text-2xl font-bold" id="kpiMedia">R$ 0,00</div></div>
+      <div class="card p-4"><div class="text-xs text-gray-400">Diferença vs taxa</div><div class="text-xl md:text-2xl font-bold" id="kpiDif">R$ 0,00</div></div>
+    </div>
+    <div class="card p-4">
+      <h2 class="font-bold mb-3">Por motorista</h2>
+      <div class="overflow-x-auto"><table>
+        <thead><tr><th>Motorista</th><th>Lanç.</th><th>Km</th><th>Repassado</th><th>Esperado</th><th>Diferença</th></tr></thead>
+        <tbody id="tbMotorista"></tbody>
+      </table></div>
+      <p class="text-xs text-gray-500 mt-2">Esperado = km × taxa de referência. Diferença positiva = repassado acima do esperado.</p>
+    </div>
+  </div>
+
+  <!-- ABA LANÇAMENTOS -->
+  <div id="aba-lanc" class="hidden">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold">Lançamentos</h2>
+      <button class="btn-red text-sm" onclick="abrirModalLanc()">＋ Novo lançamento</button>
+    </div>
+    <div class="card p-4"><div class="overflow-x-auto"><table>
+      <thead><tr><th>Data</th><th>Motorista</th><th>Km</th><th>Valor</th><th>R$/km</th><th>Obs.</th><th></th></tr></thead>
+      <tbody id="tbLanc"></tbody>
+    </table></div></div>
+  </div>
+
+  <!-- ABA MOTORISTAS -->
+  <div id="aba-mot" class="hidden">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold">Motoristas</h2>
+      <button class="btn-red text-sm" onclick="abrirModalMot()">＋ Novo motorista</button>
+    </div>
+    <div class="card p-4"><div class="overflow-x-auto"><table>
+      <thead><tr><th>Nome</th><th>Status</th><th></th></tr></thead>
+      <tbody id="tbMot"></tbody>
+    </table></div></div>
+  </div>
+
+  <!-- ABA USUÁRIOS (admin) -->
+  <div id="aba-usr" class="hidden">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold">Usuários</h2>
+      <button class="btn-red text-sm" onclick="abrirModalUsr()">＋ Novo usuário</button>
+    </div>
+    <div class="card p-4"><div class="overflow-x-auto"><table>
+      <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+      <tbody id="tbUsr"></tbody>
+    </table></div></div>
+  </div>
+
+  <!-- ABA KM / ODÔMETRO -->
+  <div id="aba-km" class="hidden">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold">🚗 Controle de KM</h2>
+      <button class="btn-red text-sm" onclick="abrirModalKm()">＋ Novo registro</button>
+    </div>
+    <div class="card p-4 mb-4">
+      <h3 class="font-bold mb-3 text-sm">Odômetro × km reportado</h3>
+      <div class="overflow-x-auto"><table>
+        <thead><tr><th>Motorista</th><th>Km odômetro</th><th>Km reportado</th><th>Diferença</th></tr></thead>
+        <tbody id="tbKmResumo"></tbody>
+      </table></div>
+      <p class="text-xs text-gray-500 mt-2">Diferença positiva = reportou mais km do que o odômetro indica.</p>
+    </div>
+    <div class="card p-4"><div class="overflow-x-auto"><table>
+      <thead><tr><th>Data</th><th>Motorista</th><th>Cliente</th><th>Odômetro</th><th>Km rodado</th><th>Obs.</th><th></th></tr></thead>
+      <tbody id="tbKm"></tbody>
+    </table></div></div>
+  </div>
+
+  <!-- ABA CLIENTES (admin) -->
+  <div id="aba-cli" class="hidden">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold">📋 Clientes</h2>
+      <button class="btn-red text-sm" onclick="abrirModalCli()">＋ Novo cliente</button>
+    </div>
+    <div class="card p-4"><div class="overflow-x-auto"><table>
+      <thead><tr><th>Nome</th><th>Status</th><th></th></tr></thead>
+      <tbody id="tbCli"></tbody>
+    </table></div></div>
+    <p class="text-xs text-gray-500 mt-2">A lista aparece para o funcionário escolher no registro de KM.</p>
+  </div>
+</div>
+
+</div><!-- /telaApp -->
+
+<!-- Modal KM / odômetro -->
+<div id="modalKm" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+  <div class="card p-6 w-full max-w-md">
+    <h3 class="font-bold text-lg mb-4">Registro de KM</h3>
+    <input type="hidden" id="kmId">
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs text-gray-400">Data</label><input type="date" id="kmData" class="w-full mt-1"></div>
+        <div><label class="text-xs text-gray-400">Motorista</label><select id="kmMot" class="w-full mt-1"></select></div>
+      </div>
+      <div><label class="text-xs text-gray-400">Cliente</label><select id="kmCliente" class="w-full mt-1"></select></div>
+      <div><label class="text-xs text-gray-400">Odômetro do carro</label><input type="number" id="kmOdometro" step="0.1" min="0" class="w-full mt-1" placeholder="Ex: 45230">
+        <div class="flex items-center gap-2 mt-2">
+          <input type="file" id="odoFoto" accept="image/*" capture="environment" class="!p-1 text-xs" onchange="escolherFotoOdo(this)">
+          <button id="odoLer" class="btn-ghost text-xs whitespace-nowrap" disabled onclick="lerOdometro()">📷 Ler da foto</button>
+        </div>
+        <div id="odoResult" class="text-sm mt-2"></div>
+      </div>
+      <div><label class="text-xs text-gray-400">Observação</label><input type="text" id="kmObs" class="w-full mt-1" placeholder="opcional"></div>
+    </div>
+    <div class="flex gap-2 mt-5 justify-end">
+      <button class="btn-ghost text-sm" onclick="fecharModal('modalKm')">Cancelar</button>
+      <button class="btn-red text-sm" onclick="salvarKm()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal cliente (admin) -->
+<div id="modalCli" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+  <div class="card p-6 w-full max-w-sm">
+    <h3 class="font-bold text-lg mb-4">Novo cliente</h3>
+    <label class="text-xs text-gray-400">Nome do cliente</label>
+    <input type="text" id="cliNome" class="w-full mt-1" placeholder="Ex: HGV">
+    <div class="flex gap-2 mt-5 justify-end">
+      <button class="btn-ghost text-sm" onclick="fecharModal('modalCli')">Cancelar</button>
+      <button class="btn-red text-sm" onclick="salvarCli()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal usuário (admin) -->
+<div id="modalUsr" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+  <div class="card p-6 w-full max-w-sm">
+    <h3 class="font-bold text-lg mb-4" id="modalUsrTitulo">Novo usuário</h3>
+    <input type="hidden" id="usrId">
+    <div class="space-y-3">
+      <div><label class="text-xs text-gray-400">Nome</label><input type="text" id="usrNome" class="w-full mt-1"></div>
+      <div><label class="text-xs text-gray-400">Usuário (login)</label><input type="text" id="usrLogin" class="w-full mt-1"></div>
+      <div><label class="text-xs text-gray-400">Senha</label><input type="text" id="usrSenha" class="w-full mt-1" placeholder="em branco mantém a atual (edição)"></div>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="usrAdmin" style="width:auto" onchange="document.getElementById('modBox').style.display=this.checked?'none':''"> Administrador</label>
+      <div id="modBox">
+        <div class="text-xs text-gray-400 mb-1">Módulos permitidos</div>
+        <label class="flex items-center gap-2 text-sm py-0.5"><input type="checkbox" class="modChk" value="dash" checked style="width:auto"> 📊 Resumo</label>
+        <label class="flex items-center gap-2 text-sm py-0.5"><input type="checkbox" class="modChk" value="lanc" checked style="width:auto"> 🧾 Lançamentos</label>
+        <label class="flex items-center gap-2 text-sm py-0.5"><input type="checkbox" class="modChk" value="mot" checked style="width:auto"> 👥 Motoristas</label>
+        <label class="flex items-center gap-2 text-sm py-0.5"><input type="checkbox" class="modChk" value="km" checked style="width:auto"> 🚗 KM</label>
+        <p class="text-xs text-gray-500 mt-1">Administradores veem todos os módulos.</p>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-5 justify-end">
+      <button class="btn-ghost text-sm" onclick="fecharModal('modalUsr')">Cancelar</button>
+      <button class="btn-red text-sm" onclick="salvarUsr()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal lançamento -->
+<div id="modalLanc" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+  <div class="card p-6 w-full max-w-md">
+    <h3 class="font-bold text-lg mb-4" id="modalLancTitulo">Novo lançamento</h3>
+    <input type="hidden" id="lancId">
+    <div class="space-y-3">
+      <div><label class="text-xs text-gray-400">Data</label><input type="date" id="lancData" class="w-full mt-1"></div>
+      <div><label class="text-xs text-gray-400">Motorista</label><select id="lancMot" class="w-full mt-1"></select></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs text-gray-400">Km reportado</label><input type="number" id="lancKm" step="0.1" min="0" class="w-full mt-1" placeholder="0"></div>
+        <div><label class="text-xs text-gray-400">Valor repassado (R$)</label><input type="number" id="lancValor" step="0.01" min="0" class="w-full mt-1" placeholder="0,00"></div>
+      </div>
+      <div><label class="text-xs text-gray-400">Observação</label><input type="text" id="lancObs" class="w-full mt-1" placeholder="opcional"></div>
+      <div class="text-sm text-gray-400" id="lancPrev"></div>
+    </div>
+    <div class="flex gap-2 mt-5 justify-end">
+      <button class="btn-ghost text-sm" onclick="fecharModal('modalLanc')">Cancelar</button>
+      <button class="btn-red text-sm" onclick="salvarLanc()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal motorista -->
+<div id="modalMot" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+  <div class="card p-6 w-full max-w-sm">
+    <h3 class="font-bold text-lg mb-4">Novo motorista</h3>
+    <label class="text-xs text-gray-400">Nome</label>
+    <input type="text" id="motNome" class="w-full mt-1" placeholder="Nome do motorista">
+    <div class="flex gap-2 mt-5 justify-end">
+      <button class="btn-ghost text-sm" onclick="fecharModal('modalMot')">Cancelar</button>
+      <button class="btn-red text-sm" onclick="salvarMot()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal config -->
+<div id="modalCfg" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+  <div class="card p-6 w-full max-w-sm">
+    <h3 class="font-bold text-lg mb-4">Taxa de referência</h3>
+    <label class="text-xs text-gray-400">R$ por km</label>
+    <input type="number" id="cfgTaxa" step="0.01" min="0" class="w-full mt-1">
+    <p class="text-xs text-gray-500 mt-2">Usada para calcular o valor esperado (km × taxa) e a diferença por motorista.</p>
+    <div class="flex gap-2 mt-5 justify-end">
+      <button class="btn-ghost text-sm" onclick="fecharModal('modalCfg')">Cancelar</button>
+      <button class="btn-red text-sm" onclick="salvarCfg()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://srenhrjrprufixoiqvlz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_e08JBryAm6Pxx3Pp4aVLag_V1yO4dYM';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let motoristas = [], repasses = [], taxaKm = 0.70;
+let usuarios = [], sessao = null, kms = [], clientes = [];
+const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let filtros = { de:null, ate:null, mot:'' };
+
+const fmtR$ = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const fmtKm = v => (v||0).toLocaleString('pt-BR',{maximumFractionDigits:1}) + ' km';
+const hojeISO = () => new Date().toISOString().slice(0,10);
+const uid = p => p + '-' + Date.now() + '-' + Math.floor(Math.random()*1e6);
+
+// ---------- carga ----------
+async function carregar() {
+  const [m, r, c, k, cl] = await Promise.all([
+    sb.from('motoristas').select('*').order('nome'),
+    sb.from('repasses').select('*').order('data',{ascending:false}).limit(2000),
+    sb.from('repasse_config').select('*').eq('id',1).maybeSingle(),
+    sb.from('km_registros').select('*').order('data',{ascending:false}).limit(2000),
+    sb.from('atend_clientes').select('*').order('nome')
+  ]);
+  if (m.error) return erro('motoristas: ' + m.error.message);
+  if (r.error) return erro('repasses: ' + r.error.message);
+  motoristas = m.data || []; repasses = r.data || []; kms = k.error ? [] : (k.data || []);
+  clientes = cl.error ? [] : (cl.data || []);
+  if (c.data) taxaKm = parseFloat(c.data.taxa_km) || 0.70;
+  document.getElementById('taxaLbl').textContent = 'R$ ' + taxaKm.toFixed(2).replace('.',',') + '/km';
+  montarFiltros(); renderTudo();
+  if (sessao && sessao.admin) carregarUsuarios();
+}
+function erro(msg){ alert('Erro: ' + msg); }
+
+// ---------- filtros ----------
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function montarFiltros(){
+  const sm = document.getElementById('fMes'), sa = document.getElementById('fAno');
+  if (!sm.options.length){
+    sm.innerHTML = '<option value="">—</option>' + MESES.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
+    const ano = new Date().getFullYear();
+    sa.innerHTML = '<option value="">—</option>' + [ano+1,ano,ano-1,ano-2].map(a=>`<option value="${a}">${a}</option>`).join('');
+    sm.value = new Date().getMonth()+1; sa.value = ano;
+  }
+  const fm = document.getElementById('fMot');
+  fm.innerHTML = '<option value="">Todos</option>' + motoristas.filter(m=>m.ativo).map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  const lm = document.getElementById('lancMot');
+  lm.innerHTML = motoristas.filter(m=>m.ativo).map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  const kmm = document.getElementById('kmMot');
+  kmm.innerHTML = motoristas.filter(m=>m.ativo).map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  const kc = document.getElementById('kmCliente');
+  kc.innerHTML = '<option value="">Selecione...</option>' + clientes.filter(c=>c.ativo).map(c=>`<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
+}
+function aplicarFiltros(){
+  const m = document.getElementById('fMes').value, a = document.getElementById('fAno').value;
+  let de = document.getElementById('fDe').value || null, ate = document.getElementById('fAte').value || null;
+  if (m && a){ const mm = String(m).padStart(2,'0'); const last = new Date(a, m, 0).getDate(); de = `${a}-${mm}-01`; ate = `${a}-${mm}-${last}`; }
+  else if (a && !m){ de = `${a}-01-01`; ate = `${a}-12-31`; }
+  filtros = { de, ate, mot: document.getElementById('fMot').value };
+  renderTudo();
+}
+function limparFiltros(){
+  document.getElementById('fMes').value=''; document.getElementById('fAno').value='';
+  document.getElementById('fDe').value=''; document.getElementById('fAte').value='';
+  document.getElementById('fMot').value=''; filtros = {de:null,ate:null,mot:''}; renderTudo();
+}
+function repassesFiltrados(){
+  return repasses.filter(r =>
+    (!filtros.de || r.data >= filtros.de) &&
+    (!filtros.ate || r.data <= filtros.ate) &&
+    (!filtros.mot || r.motorista_id === filtros.mot));
+}
+const nomeMot = id => (motoristas.find(m=>m.id===id)||{}).nome || '—';
+
+// ---------- render ----------
+function renderTudo(){ renderResumo(); renderLanc(); renderMot(); renderKm(); renderCli(); }
+function renderResumo(){
+  const rs = repassesFiltrados();
+  const totV = rs.reduce((s,r)=>s+parseFloat(r.valor||0),0);
+  const totK = rs.reduce((s,r)=>s+parseFloat(r.km||0),0);
+  const media = totK > 0 ? totV/totK : 0;
+  const esperado = totK * taxaKm, dif = totV - esperado;
+  document.getElementById('kpiValor').textContent = fmtR$(totV);
+  document.getElementById('kpiKm').textContent = fmtKm(totK);
+  document.getElementById('kpiMedia').textContent = fmtR$(media) + '/km';
+  const kd = document.getElementById('kpiDif');
+  kd.textContent = (dif>=0?'+':'') + fmtR$(dif).replace('R$','R$ ');
+  kd.className = 'text-xl md:text-2xl font-bold ' + (dif>0.005 ? 'text-red-400' : dif<-0.005 ? 'text-emerald-400' : '');
+  const por = {};
+  rs.forEach(r=>{ (por[r.motorista_id] = por[r.motorista_id]||{n:0,km:0,v:0}).n++; por[r.motorista_id].km+=parseFloat(r.km||0); por[r.motorista_id].v+=parseFloat(r.valor||0); });
+  document.getElementById('tbMotorista').innerHTML = Object.entries(por).map(([id,p])=>{
+    const esp = p.km*taxaKm, d = p.v-esp;
+    const cor = d>0.005?'text-red-400':d<-0.005?'text-emerald-400':'text-gray-400';
+    return `<tr><td class="font-semibold">${nomeMot(id)}</td><td>${p.n}</td><td>${fmtKm(p.km)}</td><td>${fmtR$(p.v)}</td><td class="text-gray-400">${fmtR$(esp)}</td><td class="${cor} font-bold">${d>=0?'+':''}${fmtR$(d)}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="text-center text-gray-500 py-6">Sem lançamentos no período.</td></tr>';
+}
+function renderLanc(){
+  const rs = repassesFiltrados().slice(0,300);
+  document.getElementById('tbLanc').innerHTML = rs.map(r=>{
+    const k = parseFloat(r.km||0), v = parseFloat(r.valor||0);
+    const rk = k>0 ? fmtR$(v/k)+'/km' : '—';
+    return `<tr><td>${r.data.split('-').reverse().join('/')}</td><td class="font-semibold">${nomeMot(r.motorista_id)}</td><td>${fmtKm(k)}</td><td>${fmtR$(v)}</td><td class="text-gray-400">${rk}</td><td class="text-gray-500 text-xs">${r.observacao||''}</td>
+    <td class="whitespace-nowrap"><button class="text-xs underline mr-2" onclick="editarLanc('${r.id}')">editar</button><button class="text-xs underline text-red-400" onclick="excluirLanc('${r.id}')">excluir</button></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="text-center text-gray-500 py-6">Sem lançamentos.</td></tr>';
+}
+function renderMot(){
+  document.getElementById('tbMot').innerHTML = motoristas.map(m=>
+    `<tr><td class="font-semibold">${m.nome}</td><td>${m.ativo?'<span class="text-emerald-400">Ativo</span>':'<span class="text-gray-500">Inativo</span>'}</td>
+    <td class="text-right whitespace-nowrap"><button class="text-xs underline mr-2" onclick="toggleMot('${m.id}',${!m.ativo})">${m.ativo?'inativar':'ativar'}</button><button class="text-xs underline text-red-400" onclick="excluirMot('${m.id}')">excluir</button></td></tr>`
+  ).join('') || '<tr><td colspan="3" class="text-center text-gray-500 py-6">Nenhum motorista cadastrado.</td></tr>';
+}
+
+// ---------- abas / modais ----------
+function trocarAba(q){
+  if (sessao && sessao.modulos && !sessao.modulos.includes(q)) return;
+  ['dash','lanc','mot','usr','km','cli'].forEach(a=>{
+    document.getElementById('aba-'+a).classList.toggle('hidden', a!==q);
+    document.getElementById('tab-'+a).classList.toggle('active', a===q);
+  });
+}
+function fecharModal(id){ document.getElementById(id).classList.add('hidden'); }
+function abrirModalLanc(){
+  document.getElementById('lancId').value=''; document.getElementById('modalLancTitulo').textContent='Novo lançamento';
+  document.getElementById('lancData').value=hojeISO(); document.getElementById('lancKm').value='';
+  document.getElementById('lancValor').value=''; document.getElementById('lancObs').value=''; atualizaPrev();
+  document.getElementById('modalLanc').classList.remove('hidden');
+}
+function atualizaPrev(){
+  const k = parseFloat(document.getElementById('lancKm').value||0);
+  document.getElementById('lancPrev').textContent = k>0 ? `Valor esperado pela taxa: ${fmtR$(k*taxaKm)}` : '';
+}
+document.addEventListener('input', e=>{ if(['lancKm','lancValor'].includes(e.target.id)) atualizaPrev(); });
+async function salvarLanc(){
+  const id = document.getElementById('lancId').value;
+  const d = { motorista_id:document.getElementById('lancMot').value, data:document.getElementById('lancData').value||hojeISO(),
+    km:parseFloat(document.getElementById('lancKm').value||0), valor:parseFloat(document.getElementById('lancValor').value||0),
+    observacao:document.getElementById('lancObs').value.trim() };
+  if(!d.motorista_id) return alert('Escolha o motorista.');
+  let e;
+  if(id) e = (await sb.from('repasses').update(d).eq('id',id)).error;
+  else e = (await sb.from('repasses').insert({...d,id:uid('rep')})).error;
+  if(e) return erro(e.message);
+  fecharModal('modalLanc'); carregar();
+}
+function editarLanc(id){
+  const r = repasses.find(x=>x.id===id); if(!r) return;
+  document.getElementById('lancId').value=id; document.getElementById('modalLancTitulo').textContent='Editar lançamento';
+  document.getElementById('lancData').value=r.data; document.getElementById('lancMot').value=r.motorista_id;
+  document.getElementById('lancKm').value=r.km; document.getElementById('lancValor').value=r.valor;
+  document.getElementById('lancObs').value=r.observacao||''; atualizaPrev();
+  document.getElementById('modalLanc').classList.remove('hidden');
+}
+async function excluirLanc(id){
+  if(!confirm('Excluir este lançamento?')) return;
+  const {error} = await sb.from('repasses').delete().eq('id',id);
+  if(error) return erro(error.message); carregar();
+}
+function abrirModalMot(){ document.getElementById('motNome').value=''; document.getElementById('modalMot').classList.remove('hidden'); }
+async function salvarMot(){
+  const nome = document.getElementById('motNome').value.trim();
+  if(!nome) return alert('Informe o nome.');
+  const {error} = await sb.from('motoristas').insert({id:uid('mot'),nome,ativo:true});
+  if(error) return erro(error.message);
+  fecharModal('modalMot'); carregar();
+}
+async function toggleMot(id,ativo){
+  const {error} = await sb.from('motoristas').update({ativo}).eq('id',id);
+  if(error) return erro(error.message); carregar();
+}
+async function excluirMot(id){
+  if(repasses.some(r=>r.motorista_id===id)) return alert('Este motorista tem lançamentos e não pode ser excluído. Inative-o.');
+  if(!confirm('Excluir motorista?')) return;
+  const {error} = await sb.from('motoristas').delete().eq('id',id);
+  if(error) return erro(error.message); carregar();
+}
+
+// ---------- clientes (admin) ----------
+function renderCli(){
+  document.getElementById('tbCli').innerHTML = clientes.map(c =>
+    `<tr><td class="font-semibold">${esc(c.nome)}</td>
+     <td>${c.ativo ? '<span class="text-emerald-400">Ativo</span>' : '<span class="text-gray-500">Inativo</span>'}</td>
+     <td class="text-right whitespace-nowrap">
+       <button class="text-xs underline mr-2" onclick="toggleCli('${c.id}',${!c.ativo})">${c.ativo ? 'inativar' : 'ativar'}</button>
+       <button class="text-xs underline text-red-400" onclick="excluirCli('${c.id}')">excluir</button>
+     </td></tr>`
+  ).join('') || '<tr><td colspan="3" class="text-center text-gray-500 py-6">Nenhum cliente cadastrado.</td></tr>';
+}
+function abrirModalCli(){
+  document.getElementById('cliNome').value = '';
+  document.getElementById('modalCli').classList.remove('hidden');
+}
+async function salvarCli(){
+  const nome = document.getElementById('cliNome').value.trim();
+  if (!nome) return alert('Informe o nome do cliente.');
+  const { error } = await sb.from('atend_clientes').insert({ id: uid('cli'), nome, ativo: true });
+  if (error) return erro(error.message);
+  fecharModal('modalCli'); carregar();
+}
+async function toggleCli(id, ativo){
+  const { error } = await sb.from('atend_clientes').update({ ativo }).eq('id', id);
+  if (error) return erro(error.message); carregar();
+}
+async function excluirCli(id){
+  if (!confirm('Excluir este cliente? (os registros antigos mantêm o nome)')) return;
+  const { error } = await sb.from('atend_clientes').delete().eq('id', id);
+  if (error) return erro(error.message); carregar();
+}
+function abrirConfig(){ document.getElementById('cfgTaxa').value=taxaKm.toFixed(2); document.getElementById('modalCfg').classList.remove('hidden'); }
+async function salvarCfg(){
+  const v = parseFloat(document.getElementById('cfgTaxa').value||0);
+  const {error} = await sb.from('repasse_config').update({taxa_km:v}).eq('id',1);
+  if(error) return erro(error.message);
+  fecharModal('modalCfg'); carregar();
+}
+
+// ---------- KM / odômetro ----------
+let fotoOdo = null;
+function escolherFotoOdo(input){
+  fotoOdo = (input.files && input.files[0]) || null;
+  document.getElementById('odoLer').disabled = !fotoOdo;
+  document.getElementById('odoResult').innerHTML = '';
+}
+function carregarImagemOdo(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+function recortePainel(img){
+  // região central do painel (display do odômetro), ampliada 2x
+  const sx = img.width * 0.35, sy = img.height * 0.38;
+  const sw = img.width * 0.35, sh = img.height * 0.34;
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(sw * 2); cv.height = Math.round(sh * 2);
+  cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+  return cv;
+}
+async function ocrDigitos(fonte){
+  const { data } = await Tesseract.recognize(fonte, 'eng', {
+    tessedit_char_whitelist: '0123456789',
+    tessedit_pageseg_mode: '6'
+  });
+  return ((data.text || '').match(/\d+/g) || []).sort((a,b) => b.length - a.length)[0] || '';
+}
+async function lerOdometro(){
+  if (!fotoOdo) return;
+  const btn = document.getElementById('odoLer'), r = document.getElementById('odoResult');
+  btn.disabled = true; btn.textContent = 'Lendo...';
+  r.innerHTML = '<span class="text-gray-500 text-xs">Analisando a foto...</span>';
+  try {
+    const img = await carregarImagemOdo(fotoOdo);
+    const leitura = await ocrDigitos(recortePainel(img));
+    if (leitura) {
+      r.innerHTML = `Sugestão: <b class="text-white text-lg">${leitura}</b>
+        <button class="btn-red text-xs ml-2" onclick="confirmarOdo('${leitura}')">usar</button>
+        <div class="text-gray-500 text-xs mt-1">Confira na foto antes de usar. Se estiver errado, digite manualmente.</div>`;
+    } else {
+      r.innerHTML = '<span class="text-red-400 text-xs">Não encontrei números nítidos. Digite o odômetro manualmente.</span>';
+    }
+  } catch(e) {
+    r.innerHTML = '<span class="text-red-400 text-xs">Falha na leitura. Digite o odômetro manualmente.</span>';
+  }
+  btn.disabled = false; btn.textContent = '📷 Ler da foto';
+}
+function confirmarOdo(v){
+  document.getElementById('kmOdometro').value = v;
+  document.getElementById('odoResult').innerHTML = '<span class="text-emerald-400 text-xs">✓ preenchido — confira e salve.</span>';
+}
+function kmDiffs(){
+  const por = {};
+  kms.forEach(k => { (por[k.motorista_id] = por[k.motorista_id] || []).push(k); });
+  const dif = {};
+  Object.values(por).forEach(arr => {
+    arr.sort((a,b) => a.data < b.data ? -1 : a.data > b.data ? 1 : (a.created_at < b.created_at ? -1 : 1));
+    for (let i = 0; i < arr.length; i++)
+      dif[arr[i].id] = i === 0 ? null : parseFloat(arr[i].odometro) - parseFloat(arr[i-1].odometro);
+  });
+  return dif;
+}
+function kmsFiltrados(){
+  return kms.filter(k =>
+    (!filtros.de || k.data >= filtros.de) &&
+    (!filtros.ate || k.data <= filtros.ate) &&
+    (!filtros.mot || k.motorista_id === filtros.mot));
+}
+function renderKm(){
+  const dif = kmDiffs();
+  const rs = kmsFiltrados().slice(0, 300);
+  const por = {};
+  rs.forEach(k => {
+    const d = dif[k.id];
+    const p = por[k.motorista_id] = por[k.motorista_id] || { km: 0, n: 0 };
+    if (d !== null && d >= 0) p.km += d;
+    p.n++;
+  });
+  const rep = {};
+  repassesFiltrados().forEach(r => { rep[r.motorista_id] = (rep[r.motorista_id] || 0) + parseFloat(r.km || 0); });
+  const ids = [...new Set([...Object.keys(por), ...Object.keys(rep)])];
+  document.getElementById('tbKmResumo').innerHTML = ids.map(id => {
+    const ko = por[id] ? por[id].km : 0, kr = rep[id] || 0, d = kr - ko;
+    const cor = d > 0.5 ? 'text-red-400' : d < -0.5 ? 'text-emerald-400' : 'text-gray-400';
+    return `<tr><td class="font-semibold">${nomeMot(id)}</td><td>${fmtKm(ko)}</td><td>${fmtKm(kr)}</td><td class="${cor} font-bold">${d >= 0 ? '+' : ''}${fmtKm(d)}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="text-center text-gray-500 py-6">Sem registros no período.</td></tr>';
+  document.getElementById('tbKm').innerHTML = rs.map(k => {
+    const d = dif[k.id];
+    const dTxt = d === null ? '<span class="text-gray-600">—</span>' : (d < 0 ? `<span class="text-red-400 font-bold">${fmtKm(d)} ⚠</span>` : fmtKm(d));
+    return `<tr><td>${k.data.split('-').reverse().join('/')}</td><td class="font-semibold">${nomeMot(k.motorista_id)}</td><td>${k.cliente || '<span class="text-gray-600">—</span>'}</td><td>${parseFloat(k.odometro).toLocaleString('pt-BR')}</td><td>${dTxt}</td><td class="text-gray-500 text-xs">${k.observacao || ''}</td>
+    <td class="whitespace-nowrap"><button class="text-xs underline mr-2" onclick="editarKm('${k.id}')">editar</button><button class="text-xs underline text-red-400" onclick="excluirKm('${k.id}')">excluir</button></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="text-center text-gray-500 py-6">Sem registros.</td></tr>';
+}
+function abrirModalKm(){
+  document.getElementById('kmId').value = '';
+  document.getElementById('kmData').value = hojeISO();
+  document.getElementById('kmCliente').value = '';
+  document.getElementById('kmOdometro').value = '';
+  document.getElementById('kmObs').value = '';
+  document.getElementById('modalKm').classList.remove('hidden');
+}
+async function salvarKm(){
+  const id = document.getElementById('kmId').value;
+  const d = {
+    motorista_id: document.getElementById('kmMot').value,
+    data: document.getElementById('kmData').value || hojeISO(),
+    cliente: document.getElementById('kmCliente').value.trim(),
+    odometro: parseFloat(document.getElementById('kmOdometro').value || 0),
+    observacao: document.getElementById('kmObs').value.trim()
+  };
+  if (!d.motorista_id) return alert('Escolha o motorista.');
+  if (!d.cliente) return alert('Informe o cliente.');
+  let e;
+  if (id) e = (await sb.from('km_registros').update(d).eq('id', id)).error;
+  else e = (await sb.from('km_registros').insert({ ...d, id: uid('km') })).error;
+  if (e) return erro(e.message);
+  fecharModal('modalKm'); carregar();
+}
+function editarKm(id){
+  const k = kms.find(x => x.id === id); if (!k) return;
+  document.getElementById('kmId').value = id;
+  document.getElementById('kmData').value = k.data;
+  document.getElementById('kmMot').value = k.motorista_id;
+  document.getElementById('kmCliente').value = k.cliente || '';
+  document.getElementById('kmOdometro').value = k.odometro;
+  document.getElementById('kmObs').value = k.observacao || '';
+  document.getElementById('modalKm').classList.remove('hidden');
+}
+async function excluirKm(id){
+  if (!confirm('Excluir este registro?')) return;
+  const { error } = await sb.from('km_registros').delete().eq('id', id);
+  if (error) return erro(error.message); carregar();
+}
+
+// ---------- autenticação ----------
+async function initAuth(){
+  const t = await sb.from('atend_usuarios').select('id').limit(1);
+  if (t.error){
+    document.getElementById('telaAuth').innerHTML = `<div class="min-h-screen flex items-center justify-center p-4"><div class="card p-6 text-center text-red-400">Erro ao acessar o banco: ${t.error.message}<br><span class="text-xs text-gray-500">Rode a migração 03 (tabela atend_usuarios) no Supabase.</span></div></div>`;
+    return;
+  }
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem('nl_atend_sessao') || 'null'); } catch(e){}
+  if (s && s.id){
+    const u = await sb.from('atend_usuarios').select('*').eq('id', s.id).eq('ativo', true).maybeSingle();
+    if (u.data){ entrar(u.data); return; }
+    localStorage.removeItem('nl_atend_sessao');
+  }
+  if (!t.data || !t.data.length) mostrarSetup(); else mostrarLogin();
+}
+function telaBase(titulo, subt, corpo){
+  document.getElementById('telaAuth').innerHTML = `
+  <div class="min-h-screen flex items-center justify-center p-4">
+    <div class="card p-6 w-full max-w-sm">
+      <h1 class="text-xl font-extrabold text-center mb-1">NEW LIFE <span style="color:var(--nl-red)">·</span> ATENDIMENTO</h1>
+      <p class="text-xs text-gray-500 text-center mb-1">${titulo}</p>
+      <p class="text-xs text-gray-600 text-center mb-5">${subt}</p>
+      ${corpo}
+    </div>
+  </div>`;
+}
+function mostrarLogin(){
+  telaBase('Acesso restrito', 'Entre com seu usuário e senha', `
+      <label class="text-xs text-gray-400">Usuário</label>
+      <input id="authUser" class="w-full mt-1 mb-3" autocomplete="username">
+      <label class="text-xs text-gray-400">Senha</label>
+      <input id="authPass" type="password" class="w-full mt-1 mb-4" autocomplete="current-password" onkeydown="if(event.key==='Enter')fazerLogin()">
+      <div id="authErro" class="text-red-400 text-sm mb-3 hidden"></div>
+      <button class="btn-red w-full" onclick="fazerLogin()">Entrar</button>`);
+}
+async function fazerLogin(){
+  const u = document.getElementById('authUser').value.trim(), p = document.getElementById('authPass').value;
+  const r = await sb.from('atend_usuarios').select('*').eq('usuario', u).eq('ativo', true).maybeSingle();
+  const e = document.getElementById('authErro');
+  if (r.error || !r.data || r.data.senha !== p){ e.textContent = 'Usuário ou senha inválidos.'; e.classList.remove('hidden'); return; }
+  entrar(r.data);
+}
+function mostrarSetup(){
+  telaBase('Primeiro acesso', 'Crie sua conta de administrador', `
+      <label class="text-xs text-gray-400">Seu nome</label>
+      <input id="suNome" class="w-full mt-1 mb-3">
+      <label class="text-xs text-gray-400">Usuário (login)</label>
+      <input id="suLogin" class="w-full mt-1 mb-3">
+      <label class="text-xs text-gray-400">Senha</label>
+      <input id="suSenha" type="password" class="w-full mt-1 mb-3">
+      <label class="text-xs text-gray-400">Confirmar senha</label>
+      <input id="suSenha2" type="password" class="w-full mt-1 mb-4">
+      <div id="authErro" class="text-red-400 text-sm mb-3 hidden"></div>
+      <button class="btn-red w-full" onclick="criarAdmin()">Criar administrador</button>`);
+}
+async function criarAdmin(){
+  const nome = document.getElementById('suNome').value.trim();
+  const login = document.getElementById('suLogin').value.trim();
+  const s1 = document.getElementById('suSenha').value, s2 = document.getElementById('suSenha2').value;
+  const e = document.getElementById('authErro');
+  const falha = m => { e.textContent = m; e.classList.remove('hidden'); };
+  if (!nome || !login || !s1) return falha('Preencha todos os campos.');
+  if (s1 !== s2) return falha('As senhas não conferem.');
+  if (s1.length < 4) return falha('A senha precisa de ao menos 4 caracteres.');
+  const r = await sb.from('atend_usuarios').insert({ id: uid('usr'), nome, usuario: login, senha: s1, admin: true, ativo: true });
+  if (r.error) return falha(r.error.message.includes('duplicate') ? 'Este usuário já existe.' : r.error.message);
+  const u = await sb.from('atend_usuarios').select('*').eq('usuario', login).maybeSingle();
+  entrar(u.data);
+}
+function entrar(u){
+  sessao = u;
+  sessao.modulos = u.admin ? ['dash','lanc','mot','usr','km','cli']
+    : (u.modulos ? u.modulos.split(',').filter(Boolean) : ['dash','lanc','mot','km']);
+  localStorage.setItem('nl_atend_sessao', JSON.stringify({ id: u.id }));
+  document.getElementById('telaAuth').innerHTML = '';
+  document.getElementById('telaApp').classList.remove('hidden');
+  document.getElementById('userLbl').textContent = u.nome + (u.admin ? ' (admin)' : '');
+  document.getElementById('tab-usr').classList.toggle('hidden', !u.admin);
+  document.getElementById('tab-cli').classList.toggle('hidden', !u.admin);
+  ['dash','lanc','mot','km'].forEach(t =>
+    document.getElementById('tab-'+t).classList.toggle('hidden', !sessao.modulos.includes(t)));
+  document.getElementById('btnCfg').style.display = u.admin ? '' : 'none';
+  carregar();
+  const first = ['dash','lanc','mot','km'].find(t => sessao.modulos.includes(t));
+  if (first) trocarAba(first);
+}
+function sair(){ localStorage.removeItem('nl_atend_sessao'); location.reload(); }
+
+// ---------- usuários (admin) ----------
+async function carregarUsuarios(){
+  const { data, error } = await sb.from('atend_usuarios').select('*').order('nome');
+  if (error) return erro(error.message);
+  usuarios = data || []; renderUsr();
+}
+const MODULOS = [['dash','📊 Resumo'],['lanc','🧾 Lançamentos'],['mot','👥 Motoristas'],['km','🚗 KM']];
+function modsTxt(u){
+  if (u.admin) return '<span style="color:var(--nl-red)" class="font-bold">admin (tudo)</span>';
+  const ms = u.modulos ? u.modulos.split(',').filter(Boolean) : MODULOS.map(m=>m[0]);
+  return MODULOS.filter(m=>ms.includes(m[0])).map(m=>m[1]).join(' ') || '<span class="text-gray-500">nenhum</span>';
+}
+function renderUsr(){
+  document.getElementById('tbUsr').innerHTML = usuarios.map(u =>
+    `<tr><td class="font-semibold">${esc(u.nome)}</td><td class="text-gray-400">${esc(u.usuario)}</td>
+     <td class="text-xs">${modsTxt(u)}</td>
+     <td>${u.ativo ? '<span class="text-emerald-400">Ativo</span>' : '<span class="text-gray-500">Inativo</span>'}</td>
+     <td class="text-right whitespace-nowrap">
+       <button class="text-xs underline mr-2" onclick="editarUsr('${u.id}')">editar</button>
+       <button class="text-xs underline mr-2" onclick="toggleUsr('${u.id}',${!u.ativo})">${u.ativo ? 'inativar' : 'ativar'}</button>
+       ${u.id === sessao.id ? '' : `<button class="text-xs underline text-red-400" onclick="excluirUsr('${u.id}')">excluir</button>`}
+     </td></tr>`
+  ).join('') || '<tr><td colspan="5" class="text-center text-gray-500 py-6">Nenhum usuário.</td></tr>';
+}
+function abrirModalUsr(){
+  document.getElementById('usrId').value = '';
+  document.getElementById('modalUsrTitulo').textContent = 'Novo usuário';
+  document.getElementById('usrNome').value = ''; document.getElementById('usrLogin').value = '';
+  document.getElementById('usrSenha').value = ''; document.getElementById('usrAdmin').checked = false;
+  document.getElementById('modBox').style.display = '';
+  document.querySelectorAll('.modChk').forEach(c => c.checked = true);
+  document.getElementById('modalUsr').classList.remove('hidden');
+}
+function editarUsr(id){
+  const u = usuarios.find(x => x.id === id); if (!u) return;
+  document.getElementById('usrId').value = id;
+  document.getElementById('modalUsrTitulo').textContent = 'Editar usuário';
+  document.getElementById('usrNome').value = u.nome; document.getElementById('usrLogin').value = u.usuario;
+  document.getElementById('usrSenha').value = ''; document.getElementById('usrAdmin').checked = !!u.admin;
+  document.getElementById('modBox').style.display = u.admin ? 'none' : '';
+  const ms = u.modulos ? u.modulos.split(',').filter(Boolean) : MODULOS.map(m=>m[0]);
+  document.querySelectorAll('.modChk').forEach(c => c.checked = ms.includes(c.value));
+  document.getElementById('modalUsr').classList.remove('hidden');
+}
+async function salvarUsr(){
+  const id = document.getElementById('usrId').value;
+  const nome = document.getElementById('usrNome').value.trim();
+  const login = document.getElementById('usrLogin').value.trim();
+  const senha = document.getElementById('usrSenha').value;
+  const admin = document.getElementById('usrAdmin').checked;
+  const mods = [...document.querySelectorAll('.modChk')].filter(c=>c.checked).map(c=>c.value);
+  if (!nome || !login) return alert('Preencha nome e usuário.');
+  if (!id && !senha) return alert('Defina uma senha.');
+  const modulos = (admin || mods.length === MODULOS.length) ? null : mods.join(',');
+  let error;
+  if (id) {
+    const upd = { nome, usuario: login, admin, modulos };
+    if (senha) upd.senha = senha;
+    if (id === sessao.id && !admin) return alert('Você não pode tirar seu próprio acesso de admin.');
+    error = (await sb.from('atend_usuarios').update(upd).eq('id', id)).error;
+  } else {
+    error = (await sb.from('atend_usuarios').insert({ id: uid('usr'), nome, usuario: login, senha, admin, ativo: true, modulos })).error;
+  }
+  if (error) return erro(error.message.includes('duplicate') ? 'Este usuário já existe.' : error.message);
+  fecharModal('modalUsr'); carregarUsuarios();
+}
+async function toggleUsr(id, ativo){
+  const { error } = await sb.from('atend_usuarios').update({ ativo }).eq('id', id);
+  if (error) return erro(error.message); carregarUsuarios();
+}
+async function resetarSenhaUsr(id){
+  const s = prompt('Nova senha para o usuário:');
+  if (!s) return;
+  const { error } = await sb.from('atend_usuarios').update({ senha: s }).eq('id', id);
+  if (error) return erro(error.message); alert('Senha atualizada.');
+}
+async function excluirUsr(id){
+  if (!confirm('Excluir este usuário?')) return;
+  const { error } = await sb.from('atend_usuarios').delete().eq('id', id);
+  if (error) return erro(error.message); carregarUsuarios();
+}
+
+initAuth();
+</script>
+</body>
+</html>
