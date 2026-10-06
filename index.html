@@ -368,15 +368,15 @@ async function salvarCfg(){
 
 // ---------- autenticação ----------
 async function initAuth(){
-  const t = await sb.from('usuarios').select('id').limit(1);
+  const t = await sb.from('atend_usuarios').select('id').limit(1);
   if (t.error){
-    document.getElementById('telaAuth').innerHTML = `<div class="min-h-screen flex items-center justify-center p-4"><div class="card p-6 text-center text-red-400">Erro ao acessar o banco: ${t.error.message}<br><span class="text-xs text-gray-500">Rode a migração 02 (tabela usuarios) no Supabase.</span></div></div>`;
+    document.getElementById('telaAuth').innerHTML = `<div class="min-h-screen flex items-center justify-center p-4"><div class="card p-6 text-center text-red-400">Erro ao acessar o banco: ${t.error.message}<br><span class="text-xs text-gray-500">Rode a migração 03 (tabela atend_usuarios) no Supabase.</span></div></div>`;
     return;
   }
   let s = null;
   try { s = JSON.parse(localStorage.getItem('nl_atend_sessao') || 'null'); } catch(e){}
   if (s && s.id){
-    const u = await sb.from('usuarios').select('*').eq('id', s.id).eq('ativo', true).maybeSingle();
+    const u = await sb.from('atend_usuarios').select('*').eq('id', s.id).eq('ativo', true).maybeSingle();
     if (u.data){ entrar(u.data); return; }
     localStorage.removeItem('nl_atend_sessao');
   }
@@ -404,7 +404,7 @@ function mostrarLogin(){
 }
 async function fazerLogin(){
   const u = document.getElementById('authUser').value.trim(), p = document.getElementById('authPass').value;
-  const r = await sb.from('usuarios').select('*').eq('usuario', u).eq('ativo', true).maybeSingle();
+  const r = await sb.from('atend_usuarios').select('*').eq('usuario', u).eq('ativo', true).maybeSingle();
   const e = document.getElementById('authErro');
   if (r.error || !r.data || r.data.senha !== p){ e.textContent = 'Usuário ou senha inválidos.'; e.classList.remove('hidden'); return; }
   entrar(r.data);
@@ -431,9 +431,9 @@ async function criarAdmin(){
   if (!nome || !login || !s1) return falha('Preencha todos os campos.');
   if (s1 !== s2) return falha('As senhas não conferem.');
   if (s1.length < 4) return falha('A senha precisa de ao menos 4 caracteres.');
-  const r = await sb.from('usuarios').insert({ id: uid('usr'), nome, usuario: login, senha: s1, admin: true, ativo: true });
+  const r = await sb.from('atend_usuarios').insert({ id: uid('usr'), nome, usuario: login, senha: s1, admin: true, ativo: true });
   if (r.error) return falha(r.error.message.includes('duplicate') ? 'Este usuário já existe.' : r.error.message);
-  const u = await sb.from('usuarios').select('*').eq('usuario', login).maybeSingle();
+  const u = await sb.from('atend_usuarios').select('*').eq('usuario', login).maybeSingle();
   entrar(u.data);
 }
 function entrar(u){
@@ -450,7 +450,7 @@ function sair(){ localStorage.removeItem('nl_atend_sessao'); location.reload(); 
 
 // ---------- usuários (admin) ----------
 async function carregarUsuarios(){
-  const { data, error } = await sb.from('usuarios').select('*').order('nome');
+  const { data, error } = await sb.from('atend_usuarios').select('*').order('nome');
   if (error) return erro(error.message);
   usuarios = data || []; renderUsr();
 }
@@ -477,23 +477,23 @@ async function salvarUsr(){
   const senha = document.getElementById('usrSenha').value;
   const admin = document.getElementById('usrAdmin').checked;
   if (!nome || !login || !senha) return alert('Preencha nome, usuário e senha.');
-  const { error } = await sb.from('usuarios').insert({ id: uid('usr'), nome, usuario: login, senha, admin, ativo: true });
+  const { error } = await sb.from('atend_usuarios').insert({ id: uid('usr'), nome, usuario: login, senha, admin, ativo: true });
   if (error) return erro(error.message.includes('duplicate') ? 'Este usuário já existe.' : error.message);
   fecharModal('modalUsr'); carregarUsuarios();
 }
 async function toggleUsr(id, ativo){
-  const { error } = await sb.from('usuarios').update({ ativo }).eq('id', id);
+  const { error } = await sb.from('atend_usuarios').update({ ativo }).eq('id', id);
   if (error) return erro(error.message); carregarUsuarios();
 }
 async function resetarSenhaUsr(id){
   const s = prompt('Nova senha para o usuário:');
   if (!s) return;
-  const { error } = await sb.from('usuarios').update({ senha: s }).eq('id', id);
+  const { error } = await sb.from('atend_usuarios').update({ senha: s }).eq('id', id);
   if (error) return erro(error.message); alert('Senha atualizada.');
 }
 async function excluirUsr(id){
   if (!confirm('Excluir este usuário?')) return;
-  const { error } = await sb.from('usuarios').delete().eq('id', id);
+  const { error } = await sb.from('atend_usuarios').delete().eq('id', id);
   if (error) return erro(error.message); carregarUsuarios();
 }
 
