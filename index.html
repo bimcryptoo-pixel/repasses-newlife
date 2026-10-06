@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NEW LIFE - ATENDIMENTO · Controle de Repasses</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   :root { --nl-red:#e63946; }
@@ -51,6 +52,7 @@
     <div class="tab" id="tab-lanc" onclick="trocarAba('lanc')">🧾 Lançamentos</div>
     <div class="tab" id="tab-mot" onclick="trocarAba('mot')">👥 Motoristas</div>
     <div class="tab hidden" id="tab-usr" onclick="trocarAba('usr')">🔑 Usuários</div>
+    <div class="tab" id="tab-km" onclick="trocarAba('km')">🚗 KM</div>
   </div>
 
   <!-- Filtros -->
@@ -121,9 +123,56 @@
       <tbody id="tbUsr"></tbody>
     </table></div></div>
   </div>
+
+  <!-- ABA KM / ODÔMETRO -->
+  <div id="aba-km" class="hidden">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold">🚗 Controle de KM</h2>
+      <button class="btn-red text-sm" onclick="abrirModalKm()">＋ Novo registro</button>
+    </div>
+    <div class="card p-4 mb-4">
+      <h3 class="font-bold mb-3 text-sm">Odômetro × km reportado</h3>
+      <div class="overflow-x-auto"><table>
+        <thead><tr><th>Motorista</th><th>Km odômetro</th><th>Km reportado</th><th>Diferença</th></tr></thead>
+        <tbody id="tbKmResumo"></tbody>
+      </table></div>
+      <p class="text-xs text-gray-500 mt-2">Diferença positiva = reportou mais km do que o odômetro indica.</p>
+    </div>
+    <div class="card p-4"><div class="overflow-x-auto"><table>
+      <thead><tr><th>Data</th><th>Motorista</th><th>Cliente</th><th>Odômetro</th><th>Km rodado</th><th>Obs.</th><th></th></tr></thead>
+      <tbody id="tbKm"></tbody>
+    </table></div></div>
+  </div>
 </div>
 
 </div><!-- /telaApp -->
+
+<!-- Modal KM / odômetro -->
+<div id="modalKm" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+  <div class="card p-6 w-full max-w-md">
+    <h3 class="font-bold text-lg mb-4">Registro de KM</h3>
+    <input type="hidden" id="kmId">
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs text-gray-400">Data</label><input type="date" id="kmData" class="w-full mt-1"></div>
+        <div><label class="text-xs text-gray-400">Motorista</label><select id="kmMot" class="w-full mt-1"></select></div>
+      </div>
+      <div><label class="text-xs text-gray-400">Cliente</label><input type="text" id="kmCliente" class="w-full mt-1" placeholder="Cliente atendido"></div>
+      <div><label class="text-xs text-gray-400">Odômetro do carro</label><input type="number" id="kmOdometro" step="0.1" min="0" class="w-full mt-1" placeholder="Ex: 45230">
+        <div class="flex items-center gap-2 mt-2">
+          <input type="file" id="odoFoto" accept="image/*" capture="environment" class="!p-1 text-xs" onchange="escolherFotoOdo(this)">
+          <button id="odoLer" class="btn-ghost text-xs whitespace-nowrap" disabled onclick="lerOdometro()">📷 Ler da foto</button>
+        </div>
+        <div id="odoResult" class="text-sm mt-2"></div>
+      </div>
+      <div><label class="text-xs text-gray-400">Observação</label><input type="text" id="kmObs" class="w-full mt-1" placeholder="opcional"></div>
+    </div>
+    <div class="flex gap-2 mt-5 justify-end">
+      <button class="btn-ghost text-sm" onclick="fecharModal('modalKm')">Cancelar</button>
+      <button class="btn-red text-sm" onclick="salvarKm()">Salvar</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal usuário (admin) -->
 <div id="modalUsr" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
@@ -197,7 +246,7 @@ const SUPABASE_KEY = 'sb_publishable_e08JBryAm6Pxx3Pp4aVLag_V1yO4dYM';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let motoristas = [], repasses = [], taxaKm = 0.70;
-let usuarios = [], sessao = null;
+let usuarios = [], sessao = null, kms = [];
 let filtros = { de:null, ate:null, mot:'' };
 
 const fmtR$ = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -207,14 +256,15 @@ const uid = p => p + '-' + Date.now() + '-' + Math.floor(Math.random()*1e6);
 
 // ---------- carga ----------
 async function carregar() {
-  const [m, r, c] = await Promise.all([
+  const [m, r, c, k] = await Promise.all([
     sb.from('motoristas').select('*').order('nome'),
     sb.from('repasses').select('*').order('data',{ascending:false}).limit(2000),
-    sb.from('repasse_config').select('*').eq('id',1).maybeSingle()
+    sb.from('repasse_config').select('*').eq('id',1).maybeSingle(),
+    sb.from('km_registros').select('*').order('data',{ascending:false}).limit(2000)
   ]);
   if (m.error) return erro('motoristas: ' + m.error.message);
   if (r.error) return erro('repasses: ' + r.error.message);
-  motoristas = m.data || []; repasses = r.data || [];
+  motoristas = m.data || []; repasses = r.data || []; kms = k.error ? [] : (k.data || []);
   if (c.data) taxaKm = parseFloat(c.data.taxa_km) || 0.70;
   document.getElementById('taxaLbl').textContent = 'R$ ' + taxaKm.toFixed(2).replace('.',',') + '/km';
   montarFiltros(); renderTudo();
@@ -236,6 +286,8 @@ function montarFiltros(){
   fm.innerHTML = '<option value="">Todos</option>' + motoristas.filter(m=>m.ativo).map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
   const lm = document.getElementById('lancMot');
   lm.innerHTML = motoristas.filter(m=>m.ativo).map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  const kmm = document.getElementById('kmMot');
+  kmm.innerHTML = motoristas.filter(m=>m.ativo).map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
 }
 function aplicarFiltros(){
   const m = document.getElementById('fMes').value, a = document.getElementById('fAno').value;
@@ -259,7 +311,7 @@ function repassesFiltrados(){
 const nomeMot = id => (motoristas.find(m=>m.id===id)||{}).nome || '—';
 
 // ---------- render ----------
-function renderTudo(){ renderResumo(); renderLanc(); renderMot(); }
+function renderTudo(){ renderResumo(); renderLanc(); renderMot(); renderKm(); }
 function renderResumo(){
   const rs = repassesFiltrados();
   const totV = rs.reduce((s,r)=>s+parseFloat(r.valor||0),0);
@@ -298,7 +350,7 @@ function renderMot(){
 
 // ---------- abas / modais ----------
 function trocarAba(q){
-  ['dash','lanc','mot','usr'].forEach(a=>{
+  ['dash','lanc','mot','usr','km'].forEach(a=>{
     document.getElementById('aba-'+a).classList.toggle('hidden', a!==q);
     document.getElementById('tab-'+a).classList.toggle('active', a===q);
   });
@@ -364,6 +416,145 @@ async function salvarCfg(){
   const {error} = await sb.from('repasse_config').update({taxa_km:v}).eq('id',1);
   if(error) return erro(error.message);
   fecharModal('modalCfg'); carregar();
+}
+
+// ---------- KM / odômetro ----------
+let fotoOdo = null;
+function escolherFotoOdo(input){
+  fotoOdo = (input.files && input.files[0]) || null;
+  document.getElementById('odoLer').disabled = !fotoOdo;
+  document.getElementById('odoResult').innerHTML = '';
+}
+function carregarImagemOdo(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+function recortePainel(img){
+  // região central do painel (display do odômetro), ampliada 2x
+  const sx = img.width * 0.35, sy = img.height * 0.38;
+  const sw = img.width * 0.35, sh = img.height * 0.34;
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(sw * 2); cv.height = Math.round(sh * 2);
+  cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+  return cv;
+}
+async function ocrDigitos(fonte){
+  const { data } = await Tesseract.recognize(fonte, 'eng', {
+    tessedit_char_whitelist: '0123456789',
+    tessedit_pageseg_mode: '6'
+  });
+  return ((data.text || '').match(/\d+/g) || []).sort((a,b) => b.length - a.length)[0] || '';
+}
+async function lerOdometro(){
+  if (!fotoOdo) return;
+  const btn = document.getElementById('odoLer'), r = document.getElementById('odoResult');
+  btn.disabled = true; btn.textContent = 'Lendo...';
+  r.innerHTML = '<span class="text-gray-500 text-xs">Analisando a foto...</span>';
+  try {
+    const img = await carregarImagemOdo(fotoOdo);
+    const leitura = await ocrDigitos(recortePainel(img));
+    if (leitura) {
+      r.innerHTML = `Sugestão: <b class="text-white text-lg">${leitura}</b>
+        <button class="btn-red text-xs ml-2" onclick="confirmarOdo('${leitura}')">usar</button>
+        <div class="text-gray-500 text-xs mt-1">Confira na foto antes de usar. Se estiver errado, digite manualmente.</div>`;
+    } else {
+      r.innerHTML = '<span class="text-red-400 text-xs">Não encontrei números nítidos. Digite o odômetro manualmente.</span>';
+    }
+  } catch(e) {
+    r.innerHTML = '<span class="text-red-400 text-xs">Falha na leitura. Digite o odômetro manualmente.</span>';
+  }
+  btn.disabled = false; btn.textContent = '📷 Ler da foto';
+}
+function confirmarOdo(v){
+  document.getElementById('kmOdometro').value = v;
+  document.getElementById('odoResult').innerHTML = '<span class="text-emerald-400 text-xs">✓ preenchido — confira e salve.</span>';
+}
+function kmDiffs(){
+  const por = {};
+  kms.forEach(k => { (por[k.motorista_id] = por[k.motorista_id] || []).push(k); });
+  const dif = {};
+  Object.values(por).forEach(arr => {
+    arr.sort((a,b) => a.data < b.data ? -1 : a.data > b.data ? 1 : (a.created_at < b.created_at ? -1 : 1));
+    for (let i = 0; i < arr.length; i++)
+      dif[arr[i].id] = i === 0 ? null : parseFloat(arr[i].odometro) - parseFloat(arr[i-1].odometro);
+  });
+  return dif;
+}
+function kmsFiltrados(){
+  return kms.filter(k =>
+    (!filtros.de || k.data >= filtros.de) &&
+    (!filtros.ate || k.data <= filtros.ate) &&
+    (!filtros.mot || k.motorista_id === filtros.mot));
+}
+function renderKm(){
+  const dif = kmDiffs();
+  const rs = kmsFiltrados().slice(0, 300);
+  const por = {};
+  rs.forEach(k => {
+    const d = dif[k.id];
+    const p = por[k.motorista_id] = por[k.motorista_id] || { km: 0, n: 0 };
+    if (d !== null && d >= 0) p.km += d;
+    p.n++;
+  });
+  const rep = {};
+  repassesFiltrados().forEach(r => { rep[r.motorista_id] = (rep[r.motorista_id] || 0) + parseFloat(r.km || 0); });
+  const ids = [...new Set([...Object.keys(por), ...Object.keys(rep)])];
+  document.getElementById('tbKmResumo').innerHTML = ids.map(id => {
+    const ko = por[id] ? por[id].km : 0, kr = rep[id] || 0, d = kr - ko;
+    const cor = d > 0.5 ? 'text-red-400' : d < -0.5 ? 'text-emerald-400' : 'text-gray-400';
+    return `<tr><td class="font-semibold">${nomeMot(id)}</td><td>${fmtKm(ko)}</td><td>${fmtKm(kr)}</td><td class="${cor} font-bold">${d >= 0 ? '+' : ''}${fmtKm(d)}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="text-center text-gray-500 py-6">Sem registros no período.</td></tr>';
+  document.getElementById('tbKm').innerHTML = rs.map(k => {
+    const d = dif[k.id];
+    const dTxt = d === null ? '<span class="text-gray-600">—</span>' : (d < 0 ? `<span class="text-red-400 font-bold">${fmtKm(d)} ⚠</span>` : fmtKm(d));
+    return `<tr><td>${k.data.split('-').reverse().join('/')}</td><td class="font-semibold">${nomeMot(k.motorista_id)}</td><td>${k.cliente || '<span class="text-gray-600">—</span>'}</td><td>${parseFloat(k.odometro).toLocaleString('pt-BR')}</td><td>${dTxt}</td><td class="text-gray-500 text-xs">${k.observacao || ''}</td>
+    <td class="whitespace-nowrap"><button class="text-xs underline mr-2" onclick="editarKm('${k.id}')">editar</button><button class="text-xs underline text-red-400" onclick="excluirKm('${k.id}')">excluir</button></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="text-center text-gray-500 py-6">Sem registros.</td></tr>';
+}
+function abrirModalKm(){
+  document.getElementById('kmId').value = '';
+  document.getElementById('kmData').value = hojeISO();
+  document.getElementById('kmCliente').value = '';
+  document.getElementById('kmOdometro').value = '';
+  document.getElementById('kmObs').value = '';
+  document.getElementById('modalKm').classList.remove('hidden');
+}
+async function salvarKm(){
+  const id = document.getElementById('kmId').value;
+  const d = {
+    motorista_id: document.getElementById('kmMot').value,
+    data: document.getElementById('kmData').value || hojeISO(),
+    cliente: document.getElementById('kmCliente').value.trim(),
+    odometro: parseFloat(document.getElementById('kmOdometro').value || 0),
+    observacao: document.getElementById('kmObs').value.trim()
+  };
+  if (!d.motorista_id) return alert('Escolha o motorista.');
+  if (!d.cliente) return alert('Informe o cliente.');
+  let e;
+  if (id) e = (await sb.from('km_registros').update(d).eq('id', id)).error;
+  else e = (await sb.from('km_registros').insert({ ...d, id: uid('km') })).error;
+  if (e) return erro(e.message);
+  fecharModal('modalKm'); carregar();
+}
+function editarKm(id){
+  const k = kms.find(x => x.id === id); if (!k) return;
+  document.getElementById('kmId').value = id;
+  document.getElementById('kmData').value = k.data;
+  document.getElementById('kmMot').value = k.motorista_id;
+  document.getElementById('kmCliente').value = k.cliente || '';
+  document.getElementById('kmOdometro').value = k.odometro;
+  document.getElementById('kmObs').value = k.observacao || '';
+  document.getElementById('modalKm').classList.remove('hidden');
+}
+async function excluirKm(id){
+  if (!confirm('Excluir este registro?')) return;
+  const { error } = await sb.from('km_registros').delete().eq('id', id);
+  if (error) return erro(error.message); carregar();
 }
 
 // ---------- autenticação ----------
