@@ -51,19 +51,19 @@
 <div class="max-w-6xl mx-auto p-4 md:p-6">
 
   <!-- Cabeçalho -->
-  <div class="flex items-start justify-between gap-2 flex-wrap mb-4">
+  <div class="flex items-center justify-between gap-2 mb-1">
     <div class="min-w-0">
-      <h1 class="text-xl md:text-2xl font-extrabold tracking-tight">NEW LIFE <span style="color:var(--nl-red)">·</span> ATENDIMENTO</h1>
-      <p class="text-sm text-gray-400">Controle de valor repassado × km reportado</p>
+      <h1 class="text-lg md:text-2xl font-extrabold tracking-tight">NEW LIFE <span style="color:var(--nl-red)">·</span> ATENDIMENTO</h1>
+      <p class="text-xs md:text-sm text-gray-400">Controle de valor repassado × km reportado</p>
     </div>
-    <div class="text-right text-xs text-gray-500">
-      <button id="btnTema" onclick="alternarTema()" class="text-lg" title="Trocar tema claro/escuro">🌙</button>
-      <div id="userLbl" class="text-white font-semibold mb-1"></div>
-      <div>Taxa de referência: <b id="taxaLbl" class="text-white">R$ 0,70/km</b></div>
-      <button id="btnCfg" onclick="abrirConfig()" class="underline hover:text-white">alterar</button>
-      <span class="mx-1">·</span>
-      <button onclick="sair()" class="underline hover:text-white">sair</button>
-    </div>
+    <button id="btnTema" onclick="alternarTema()" class="text-xl shrink-0" title="Trocar tema claro/escuro">🌙</button>
+  </div>
+  <div class="text-xs text-gray-500 mb-4 flex items-center gap-x-2 gap-y-1 flex-wrap">
+    <span id="userLbl" class="text-white font-semibold whitespace-nowrap"></span>
+    <span class="opacity-50">·</span>
+    <span class="whitespace-nowrap">Taxa <b id="taxaLbl" class="text-white">R$ 0,70/km</b> <button id="btnCfg" onclick="abrirConfig()" class="underline">alterar</button></span>
+    <span class="opacity-50">·</span>
+    <button onclick="sair()" class="underline whitespace-nowrap">sair</button>
   </div>
 
   <!-- Abas -->
@@ -197,6 +197,8 @@
           <input type="file" id="odoFoto" accept="image/*" capture="environment" class="!p-1 text-xs" onchange="escolherFotoOdo(this)">
           <button id="odoLer" class="btn-ghost text-xs whitespace-nowrap" disabled onclick="lerOdometro()">📷 Ler da foto</button>
         </div>
+        <input type="hidden" id="kmFotoUrl">
+        <div class="text-xs text-gray-500 mt-1">📎 A foto do odômetro será anexada ao registro.</div>
         <div id="odoResult" class="text-sm mt-2"></div>
       </div>
       <div><label class="text-xs text-gray-400">Observação</label><input type="text" id="kmObs" class="w-full mt-1" placeholder="opcional"></div>
@@ -265,6 +267,11 @@
         <div><label class="text-xs text-gray-400">Valor repassado (R$)</label><input type="number" id="lancValor" step="0.01" min="0" class="w-full mt-1" placeholder="0,00"></div>
       </div>
       <div><label class="text-xs text-gray-400">Observação</label><input type="text" id="lancObs" class="w-full mt-1" placeholder="opcional"></div>
+      <div><label class="text-xs text-gray-400">📎 Comprovante de abastecimento (foto)</label>
+        <input type="file" id="lancFoto" accept="image/*" capture="environment" class="!p-1 text-xs w-full mt-1" onchange="mostrarPrevFoto('lancFoto','lancFotoPrev')">
+        <input type="hidden" id="lancFotoUrl">
+        <div id="lancFotoPrev" class="text-xs text-gray-500 mt-1"></div>
+      </div>
       <div class="text-sm text-gray-400" id="lancPrev"></div>
     </div>
     <div class="flex gap-2 mt-5 justify-end">
@@ -284,6 +291,17 @@
       <button class="btn-ghost text-sm" onclick="fecharModal('modalMot')">Cancelar</button>
       <button class="btn-red text-sm" onclick="salvarMot()">Salvar</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal ver foto (anexo) -->
+<div id="modalFoto" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-[60]">
+  <div class="card p-4 w-full max-w-lg">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold" id="fotoVerTitulo">Anexo</h3>
+      <button class="btn-ghost text-sm" onclick="fecharModal('modalFoto')">✕ Fechar</button>
+    </div>
+    <img id="fotoVerImg" class="w-full rounded-lg" style="max-height:70vh;object-fit:contain;background:#000" alt="anexo">
   </div>
 </div>
 
@@ -430,7 +448,7 @@ function renderLanc(){
     const k = parseFloat(r.km||0), v = parseFloat(r.valor||0);
     const rk = k>0 ? fmtR$(v/k)+'/km' : '—';
     return `<tr><td>${r.data.split('-').reverse().join('/')}</td><td class="font-semibold">${nomeMot(r.motorista_id)}</td><td>${fmtKm(k)}</td><td>${fmtR$(v)}</td><td class="text-gray-400">${rk}</td><td class="text-gray-500 text-xs">${r.observacao||''}</td>
-    <td class="whitespace-nowrap"><button class="text-xs underline mr-2" onclick="editarLanc('${r.id}')">editar</button><button class="text-xs underline text-red-400" onclick="excluirLanc('${r.id}')">excluir</button></td></tr>`;
+    <td class="whitespace-nowrap">${btnClipe(r.foto_url,'Comprovante de abastecimento')}<button class="text-xs underline mr-2" onclick="editarLanc('${r.id}')">editar</button><button class="text-xs underline text-red-400" onclick="excluirLanc('${r.id}')">excluir</button></td></tr>`;
   }).join('') || '<tr><td colspan="7" class="text-center text-gray-500 py-6">Sem lançamentos.</td></tr>';
 }
 function renderMot(){
@@ -453,6 +471,8 @@ function abrirModalLanc(){
   document.getElementById('lancId').value=''; document.getElementById('modalLancTitulo').textContent='Novo lançamento';
   document.getElementById('lancData').value=hojeISO(); document.getElementById('lancKm').value='';
   document.getElementById('lancValor').value=''; document.getElementById('lancObs').value=''; atualizaPrev();
+  document.getElementById('lancFoto').value=''; document.getElementById('lancFotoUrl').value='';
+  document.getElementById('lancFotoPrev').innerHTML='';
   document.getElementById('modalLanc').classList.remove('hidden');
 }
 function atualizaPrev(){
@@ -461,14 +481,21 @@ function atualizaPrev(){
 }
 document.addEventListener('input', e=>{ if(['lancKm','lancValor'].includes(e.target.id)) atualizaPrev(); });
 async function salvarLanc(){
-  const id = document.getElementById('lancId').value;
+  const idAnt = document.getElementById('lancId').value;
+  const id = idAnt || uid('rep');
+  let fotoUrl = document.getElementById('lancFotoUrl').value || null;
+  const fotoFile = document.getElementById('lancFoto').files[0];
+  if (fotoFile) {
+    try { fotoUrl = await uploadAnexo('repasses', id, fotoFile); }
+    catch(e){ return erro('foto: ' + e.message); }
+  }
   const d = { motorista_id:document.getElementById('lancMot').value, data:document.getElementById('lancData').value||hojeISO(),
     km:parseFloat(document.getElementById('lancKm').value||0), valor:parseFloat(document.getElementById('lancValor').value||0),
-    observacao:document.getElementById('lancObs').value.trim() };
+    observacao:document.getElementById('lancObs').value.trim(), foto_url: fotoUrl };
   if(!d.motorista_id) return alert('Escolha o motorista.');
   let e;
-  if(id) e = (await sb.from('repasses').update(d).eq('id',id)).error;
-  else e = (await sb.from('repasses').insert({...d,id:uid('rep')})).error;
+  if(idAnt) e = (await sb.from('repasses').update(d).eq('id',id)).error;
+  else e = (await sb.from('repasses').insert({...d,id})).error;
   if(e) return erro(e.message);
   fecharModal('modalLanc'); carregar();
 }
@@ -478,12 +505,18 @@ function editarLanc(id){
   document.getElementById('lancData').value=r.data; document.getElementById('lancMot').value=r.motorista_id;
   document.getElementById('lancKm').value=r.km; document.getElementById('lancValor').value=r.valor;
   document.getElementById('lancObs').value=r.observacao||''; atualizaPrev();
+  document.getElementById('lancFoto').value=''; document.getElementById('lancFotoUrl').value=r.foto_url||'';
+  document.getElementById('lancFotoPrev').innerHTML = r.foto_url
+    ? `📎 <button class="underline" onclick="verFoto('${r.foto_url}','Comprovante de abastecimento')">comprovante anexado</button> — escolha outra foto para substituir`
+    : '';
   document.getElementById('modalLanc').classList.remove('hidden');
 }
 async function excluirLanc(id){
   if(!confirm('Excluir este lançamento?')) return;
   const {error} = await sb.from('repasses').delete().eq('id',id);
-  if(error) return erro(error.message); carregar();
+  if(error) return erro(error.message);
+  removerAnexo('repasses', id);
+  carregar();
 }
 function abrirModalMot(){ document.getElementById('motNome').value=''; document.getElementById('modalMot').classList.remove('hidden'); }
 async function salvarMot(){
@@ -541,6 +574,51 @@ async function salvarCfg(){
   const {error} = await sb.from('repasse_config').update({taxa_km:v}).eq('id',1);
   if(error) return erro(error.message);
   fecharModal('modalCfg'); carregar();
+}
+
+// ---------- anexos (fotos) ----------
+const BUCKET_ANEXOS = 'atend-anexos';
+function mostrarPrevFoto(inputId, prevId){
+  const f = document.getElementById(inputId).files[0];
+  document.getElementById(prevId).innerHTML = f ? `📷 ${esc(f.name)} — será anexada 📎` : '';
+}
+function comprimirImagem(file, maxDim = 1280, qualidade = 0.75){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let w = img.width, h = img.height;
+        const s = Math.min(1, maxDim / Math.max(w, h));
+        w = Math.round(w * s); h = Math.round(h * s);
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        cv.toBlob(b => b ? resolve(b) : reject(new Error('compressão falhou')), 'image/jpeg', qualidade);
+      } catch(e){ URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('leitura da foto falhou')); };
+    img.src = url;
+  });
+}
+async function uploadAnexo(pasta, id, file){
+  const blob = await comprimirImagem(file);
+  const path = `${pasta}/${id}.jpg`;
+  const { error } = await sb.storage.from(BUCKET_ANEXOS).upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+  if (error) throw new Error(error.message);
+  return sb.storage.from(BUCKET_ANEXOS).getPublicUrl(path).data.publicUrl;
+}
+async function removerAnexo(pasta, id){
+  try { await sb.storage.from(BUCKET_ANEXOS).remove([`${pasta}/${id}.jpg`]); } catch(e){}
+}
+function verFoto(url, titulo){
+  document.getElementById('fotoVerImg').src = url;
+  document.getElementById('fotoVerTitulo').textContent = titulo || 'Anexo';
+  document.getElementById('modalFoto').classList.remove('hidden');
+}
+function btnClipe(url, titulo){
+  return url ? `<button class="text-base mr-2" title="${titulo || 'Ver anexo'}" onclick="verFoto('${url}','${titulo || 'Anexo'}')">📎</button>` : '';
 }
 
 // ---------- KM / odômetro ----------
@@ -638,7 +716,7 @@ function renderKm(){
     const d = dif[k.id];
     const dTxt = d === null ? '<span class="text-gray-600">—</span>' : (d < 0 ? `<span class="text-red-400 font-bold">${fmtKm(d)} ⚠</span>` : fmtKm(d));
     return `<tr><td>${k.data.split('-').reverse().join('/')}</td><td class="font-semibold">${nomeMot(k.motorista_id)}</td><td>${k.cliente || '<span class="text-gray-600">—</span>'}</td><td>${parseFloat(k.odometro).toLocaleString('pt-BR')}</td><td>${dTxt}</td><td class="text-gray-500 text-xs">${k.observacao || ''}</td>
-    <td class="whitespace-nowrap"><button class="text-xs underline mr-2" onclick="editarKm('${k.id}')">editar</button><button class="text-xs underline text-red-400" onclick="excluirKm('${k.id}')">excluir</button></td></tr>`;
+    <td class="whitespace-nowrap">${btnClipe(k.foto_url,'Foto do odômetro')}<button class="text-xs underline mr-2" onclick="editarKm('${k.id}')">editar</button><button class="text-xs underline text-red-400" onclick="excluirKm('${k.id}')">excluir</button></td></tr>`;
   }).join('') || '<tr><td colspan="7" class="text-center text-gray-500 py-6">Sem registros.</td></tr>';
 }
 function abrirModalKm(){
@@ -647,22 +725,34 @@ function abrirModalKm(){
   document.getElementById('kmCliente').value = '';
   document.getElementById('kmOdometro').value = '';
   document.getElementById('kmObs').value = '';
+  document.getElementById('kmFotoUrl').value = '';
+  fotoOdo = null;
+  document.getElementById('odoFoto').value = '';
+  document.getElementById('odoLer').disabled = true;
+  document.getElementById('odoResult').innerHTML = '';
   document.getElementById('modalKm').classList.remove('hidden');
 }
 async function salvarKm(){
-  const id = document.getElementById('kmId').value;
+  const idAnt = document.getElementById('kmId').value;
+  const id = idAnt || uid('km');
+  let fotoUrl = document.getElementById('kmFotoUrl').value || null;
+  if (fotoOdo) {
+    try { fotoUrl = await uploadAnexo('km', id, fotoOdo); }
+    catch(e){ return erro('foto: ' + e.message); }
+  }
   const d = {
     motorista_id: document.getElementById('kmMot').value,
     data: document.getElementById('kmData').value || hojeISO(),
     cliente: document.getElementById('kmCliente').value.trim(),
     odometro: parseFloat(document.getElementById('kmOdometro').value || 0),
-    observacao: document.getElementById('kmObs').value.trim()
+    observacao: document.getElementById('kmObs').value.trim(),
+    foto_url: fotoUrl
   };
   if (!d.motorista_id) return alert('Escolha o motorista.');
   if (!d.cliente) return alert('Informe o cliente.');
   let e;
-  if (id) e = (await sb.from('km_registros').update(d).eq('id', id)).error;
-  else e = (await sb.from('km_registros').insert({ ...d, id: uid('km') })).error;
+  if (idAnt) e = (await sb.from('km_registros').update(d).eq('id', id)).error;
+  else e = (await sb.from('km_registros').insert({ ...d, id })).error;
   if (e) return erro(e.message);
   fecharModal('modalKm'); carregar();
 }
@@ -674,12 +764,21 @@ function editarKm(id){
   document.getElementById('kmCliente').value = k.cliente || '';
   document.getElementById('kmOdometro').value = k.odometro;
   document.getElementById('kmObs').value = k.observacao || '';
+  document.getElementById('kmFotoUrl').value = k.foto_url || '';
+  fotoOdo = null;
+  document.getElementById('odoFoto').value = '';
+  document.getElementById('odoLer').disabled = true;
+  document.getElementById('odoResult').innerHTML = k.foto_url
+    ? `📎 <button class="underline" onclick="verFoto('${k.foto_url}','Foto do odômetro')">foto anexada</button> — escolha outra para substituir`
+    : '';
   document.getElementById('modalKm').classList.remove('hidden');
 }
 async function excluirKm(id){
   if (!confirm('Excluir este registro?')) return;
   const { error } = await sb.from('km_registros').delete().eq('id', id);
-  if (error) return erro(error.message); carregar();
+  if (error) return erro(error.message);
+  removerAnexo('km', id);
+  carregar();
 }
 
 // ---------- autenticação ----------
