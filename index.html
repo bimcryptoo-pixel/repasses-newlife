@@ -195,7 +195,7 @@
       <div><label class="text-xs text-gray-400">Odômetro do carro</label><input type="number" id="kmOdometro" step="1" min="0" class="w-full mt-1" placeholder="Ex: 45230">
         <div class="mt-2">
           <label class="text-xs text-gray-400">📎 Foto do odômetro <span class="text-red-400">(obrigatória)</span></label>
-          <input type="file" id="odoFoto" accept="image/*" capture="environment" class="!p-1 text-xs w-full min-w-0 mt-1" onchange="escolherFotoOdo(this)">
+          <input type="file" id="odoFoto" accept="image/*" class="!p-1 text-xs w-full min-w-0 mt-1" onchange="escolherFotoOdo(this)">
         </div>
         <input type="hidden" id="kmFotoUrl">
         <div id="odoFotoNome" class="text-xs text-gray-500 mt-1"></div>
@@ -267,7 +267,7 @@
       </div>
       <div><label class="text-xs text-gray-400">Observação</label><input type="text" id="lancObs" class="w-full mt-1" placeholder="opcional"></div>
       <div><label class="text-xs text-gray-400">📎 Comprovante de abastecimento (foto)</label>
-        <input type="file" id="lancFoto" accept="image/*" capture="environment" class="!p-1 text-xs w-full mt-1" onchange="mostrarPrevFoto('lancFoto','lancFotoPrev')">
+        <input type="file" id="lancFoto" accept="image/*" class="!p-1 text-xs w-full mt-1" onchange="mostrarPrevFoto('lancFoto','lancFotoPrev')">
         <input type="hidden" id="lancFotoUrl">
         <div id="lancFotoPrev" class="text-xs text-gray-500 mt-1"></div>
       </div>
