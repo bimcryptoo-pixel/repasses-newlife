@@ -116,7 +116,7 @@
       <button class="btn-red text-sm" onclick="abrirModalLanc()">＋ Novo lançamento</button>
     </div>
     <div class="card p-4"><div class="overflow-x-auto"><table>
-      <thead><tr><th>Data</th><th>Motorista</th><th>Km</th><th>Valor</th><th>R$/km</th><th>Obs.</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Motorista</th><th>Km</th><th>Valor</th><th>R$/km</th><th>Obs.</th><th>Comprovante</th><th></th></tr></thead>
       <tbody id="tbLanc"></tbody>
     </table></div></div>
   </div>
@@ -466,8 +466,9 @@ function renderLanc(){
     const k = parseFloat(r.km||0), v = parseFloat(r.valor||0);
     const rk = k>0 ? fmtR$(v/k)+'/km' : '—';
     return `<tr><td>${r.data.split('-').reverse().join('/')}</td><td class="font-semibold">${nomeMot(r.motorista_id)}</td><td>${fmtKm(k)}</td><td>${fmtR$(v)}</td><td class="text-gray-400">${rk}</td><td class="text-gray-500 text-xs">${r.observacao||''}</td>
-    <td class="whitespace-nowrap">${btnClipe(r.foto_url,'Comprovante de abastecimento')}<button class="text-xs underline mr-2" onclick="editarLanc('${r.id}')">editar</button><button class="text-xs underline text-red-400" onclick="excluirLanc('${r.id}')">excluir</button></td></tr>`;
-  }).join('') || '<tr><td colspan="7" class="text-center text-gray-500 py-6">Sem lançamentos.</td></tr>';
+    <td class="text-center">${btnClipe(r.foto_url,'Comprovante de abastecimento')}</td>
+    <td class="whitespace-nowrap"><button class="text-xs underline mr-2" onclick="editarLanc('${r.id}')">editar</button><button class="text-xs underline text-red-400" onclick="excluirLanc('${r.id}')">excluir</button></td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="text-center text-gray-500 py-6">Sem lançamentos.</td></tr>';
 }
 function renderMot(){
   document.getElementById('tbMot').innerHTML = motoristas.map(m=>
