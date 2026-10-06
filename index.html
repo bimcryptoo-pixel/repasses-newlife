@@ -215,7 +215,12 @@
       <div><label class="text-xs text-gray-400">Nome</label><input type="text" id="usrNome" class="w-full mt-1"></div>
       <div><label class="text-xs text-gray-400">Usuário (login)</label><input type="text" id="usrLogin" class="w-full mt-1"></div>
       <div><label class="text-xs text-gray-400">Senha</label><input type="text" id="usrSenha" class="w-full mt-1" placeholder="em branco mantém a atual (edição)"></div>
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="usrAdmin" style="width:auto" onchange="document.getElementById('modBox').style.display=this.checked?'none':''"> Administrador</label>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="usrAdmin" style="width:auto" onchange="document.getElementById('modBox').style.display=this.checked?'none':'';document.getElementById('usrMotBox').style.display=this.checked?'none':''"> Administrador</label>
+      <div id="usrMotBox">
+        <label class="text-xs text-gray-400">Motorista vinculado</label>
+        <select id="usrMot" class="w-full mt-1"></select>
+        <p class="text-xs text-gray-500 mt-1">Vazio = cria o motorista com o nome do usuário.</p>
+      </div>
       <div id="modBox">
         <div class="text-xs text-gray-400 mb-1">Módulos permitidos</div>
         <label class="flex items-center gap-2 text-sm py-0.5"><input type="checkbox" class="modChk" value="dash" checked style="width:auto"> 📊 Resumo</label>
@@ -334,6 +339,19 @@ function montarFiltros(){
   kmm.innerHTML = motoristas.filter(m=>m.ativo).map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
   const kc = document.getElementById('kmCliente');
   kc.innerHTML = '<option value="">Selecione...</option>' + clientes.filter(c=>c.ativo).map(c=>`<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
+  travarMotorista();
+}
+function travarMotorista(){
+  // funcionário não-admin: o motorista dele já vem travado nos formulários
+  const lock = sessao && !sessao.admin && sessao.motorista_id;
+  ['lancMot','kmMot'].forEach(mid => {
+    const el = document.getElementById(mid); if (!el) return;
+    if (lock) {
+      if (![...el.options].some(o => o.value === sessao.motorista_id))
+        el.innerHTML += `<option value="${sessao.motorista_id}">${esc(nomeMot(sessao.motorista_id))}</option>`;
+      el.value = sessao.motorista_id; el.disabled = true;
+    } else { el.disabled = false; }
+  });
 }
 function aplicarFiltros(){
   const m = document.getElementById('fMes').value, a = document.getElementById('fAno').value;
@@ -735,7 +753,8 @@ const MODULOS = [['dash','📊 Resumo'],['lanc','🧾 Lançamentos'],['mot','�
 function modsTxt(u){
   if (u.admin) return '<span style="color:var(--nl-red)" class="font-bold">admin (tudo)</span>';
   const ms = u.modulos ? u.modulos.split(',').filter(Boolean) : MODULOS.map(m=>m[0]);
-  return MODULOS.filter(m=>ms.includes(m[0])).map(m=>m[1]).join(' ') || '<span class="text-gray-500">nenhum</span>';
+  const t = MODULOS.filter(m=>ms.includes(m[0])).map(m=>m[1]).join(' ') || '<span class="text-gray-500">nenhum</span>';
+  return t + (u.motorista_id ? `<div class="text-gray-500">🚗 ${esc(nomeMot(u.motorista_id))}</div>` : '');
 }
 function renderUsr(){
   document.getElementById('tbUsr').innerHTML = usuarios.map(u =>
@@ -749,13 +768,20 @@ function renderUsr(){
      </td></tr>`
   ).join('') || '<tr><td colspan="5" class="text-center text-gray-500 py-6">Nenhum usuário.</td></tr>';
 }
+function popularUsrMot(selecionado){
+  const el = document.getElementById('usrMot');
+  el.innerHTML = '<option value="">— criar automaticamente —</option>' +
+    motoristas.map(m=>`<option value="${m.id}"${m.id===selecionado?' selected':''}>${esc(m.nome)}${m.ativo?'':' (inativo)'}</option>`).join('');
+}
 function abrirModalUsr(){
   document.getElementById('usrId').value = '';
   document.getElementById('modalUsrTitulo').textContent = 'Novo usuário';
   document.getElementById('usrNome').value = ''; document.getElementById('usrLogin').value = '';
   document.getElementById('usrSenha').value = ''; document.getElementById('usrAdmin').checked = false;
   document.getElementById('modBox').style.display = '';
+  document.getElementById('usrMotBox').style.display = '';
   document.querySelectorAll('.modChk').forEach(c => c.checked = true);
+  popularUsrMot('');
   document.getElementById('modalUsr').classList.remove('hidden');
 }
 function editarUsr(id){
@@ -765,8 +791,10 @@ function editarUsr(id){
   document.getElementById('usrNome').value = u.nome; document.getElementById('usrLogin').value = u.usuario;
   document.getElementById('usrSenha').value = ''; document.getElementById('usrAdmin').checked = !!u.admin;
   document.getElementById('modBox').style.display = u.admin ? 'none' : '';
+  document.getElementById('usrMotBox').style.display = u.admin ? 'none' : '';
   const ms = u.modulos ? u.modulos.split(',').filter(Boolean) : MODULOS.map(m=>m[0]);
   document.querySelectorAll('.modChk').forEach(c => c.checked = ms.includes(c.value));
+  popularUsrMot(u.motorista_id || '');
   document.getElementById('modalUsr').classList.remove('hidden');
 }
 async function salvarUsr(){
@@ -779,14 +807,21 @@ async function salvarUsr(){
   if (!nome || !login) return alert('Preencha nome e usuário.');
   if (!id && !senha) return alert('Defina uma senha.');
   const modulos = (admin || mods.length === MODULOS.length) ? null : mods.join(',');
+  const u0 = id ? usuarios.find(x => x.id === id) : null;
+  let motId = admin ? null : (document.getElementById('usrMot').value || (u0 && u0.motorista_id) || null);
+  if (!admin && !motId) {
+    motId = uid('mot');
+    const me = await sb.from('motoristas').insert({ id: motId, nome, ativo: true });
+    if (me.error) return erro('motorista: ' + me.error.message);
+  }
   let error;
   if (id) {
-    const upd = { nome, usuario: login, admin, modulos };
+    const upd = { nome, usuario: login, admin, modulos, motorista_id: motId };
     if (senha) upd.senha = senha;
     if (id === sessao.id && !admin) return alert('Você não pode tirar seu próprio acesso de admin.');
     error = (await sb.from('atend_usuarios').update(upd).eq('id', id)).error;
   } else {
-    error = (await sb.from('atend_usuarios').insert({ id: uid('usr'), nome, usuario: login, senha, admin, ativo: true, modulos })).error;
+    error = (await sb.from('atend_usuarios').insert({ id: uid('usr'), nome, usuario: login, senha, admin, ativo: true, modulos, motorista_id: motId })).error;
   }
   if (error) return erro(error.message.includes('duplicate') ? 'Este usuário já existe.' : error.message);
   fecharModal('modalUsr'); carregarUsuarios();
