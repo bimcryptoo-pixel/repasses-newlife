@@ -39,6 +39,7 @@
   body.light .text-gray-500 { color:#6b7280 !important; }
   body.light .text-gray-600 { color:#4b5563 !important; }
   body.light .text-white { color:#1c1f26 !important; }
+  body.sem-taxa .col-taxa { display:none; }
   @media (max-width:640px){
     .tab { padding:8px 12px; font-size:13px; }
     th, td { padding:8px 8px; font-size:13px; }
@@ -61,7 +62,7 @@
   <div class="text-xs text-gray-500 mb-4 flex items-center gap-x-2 gap-y-1 flex-wrap">
     <span id="userLbl" class="text-white font-semibold whitespace-nowrap"></span>
     <span class="opacity-50">·</span>
-    <span class="whitespace-nowrap">Taxa <b id="taxaLbl" class="text-white">R$ 0,70/km</b> <button id="btnCfg" onclick="abrirConfig()" class="underline">alterar</button></span>
+    <span id="taxaBox" class="whitespace-nowrap">Taxa <b id="taxaLbl" class="text-white">R$ 0,70/km</b> <button id="btnCfg" onclick="abrirConfig()" class="underline">alterar</button></span>
     <span class="opacity-50">·</span>
     <button onclick="sair()" class="underline whitespace-nowrap">sair</button>
   </div>
@@ -97,15 +98,15 @@
       <div class="card p-4"><div class="text-xs text-gray-400">Valor repassado</div><div class="text-xl md:text-2xl font-bold" id="kpiValor">R$ 0,00</div></div>
       <div class="card p-4"><div class="text-xs text-gray-400">Km reportado</div><div class="text-xl md:text-2xl font-bold" id="kpiKm">0 km</div></div>
       <div class="card p-4"><div class="text-xs text-gray-400">R$/km médio</div><div class="text-xl md:text-2xl font-bold" id="kpiMedia">R$ 0,00</div></div>
-      <div class="card p-4"><div class="text-xs text-gray-400">Diferença vs taxa</div><div class="text-xl md:text-2xl font-bold" id="kpiDif">R$ 0,00</div></div>
+      <div class="card p-4" id="kpiDifCard"><div class="text-xs text-gray-400">Diferença vs taxa</div><div class="text-xl md:text-2xl font-bold" id="kpiDif">R$ 0,00</div></div>
     </div>
     <div class="card p-4">
       <h2 class="font-bold mb-3">Por motorista</h2>
       <div class="overflow-x-auto"><table>
-        <thead><tr><th>Motorista</th><th>Lanç.</th><th>Km</th><th>Repassado</th><th>Esperado</th><th>Diferença</th></tr></thead>
+        <thead><tr><th>Motorista</th><th>Lanç.</th><th>Km</th><th>Repassado</th><th class="col-taxa">Esperado</th><th class="col-taxa">Diferença</th></tr></thead>
         <tbody id="tbMotorista"></tbody>
       </table></div>
-      <p class="text-xs text-gray-500 mt-2">Esperado = km × taxa de referência. Diferença positiva = repassado acima do esperado.</p>
+      <p class="text-xs text-gray-500 mt-2 col-taxa">Esperado = km × taxa de referência. Diferença positiva = repassado acima do esperado.</p>
     </div>
   </div>
 
@@ -362,8 +363,17 @@ async function carregar() {
   clientes = cl.error ? [] : (cl.data || []);
   if (c.data) taxaKm = parseFloat(c.data.taxa_km) || 0.70;
   document.getElementById('taxaLbl').textContent = 'R$ ' + taxaKm.toFixed(2).replace('.',',') + '/km';
+  aplicarPermissoes();
   montarFiltros(); renderTudo();
   if (sessao && sessao.admin) carregarUsuarios();
+}
+function aplicarPermissoes(){
+  // taxa de referência e tudo que deriva dela: só admin vê
+  const admin = !!(sessao && sessao.admin);
+  document.body.classList.toggle('sem-taxa', !admin);
+  document.getElementById('taxaBox').style.display = admin ? '' : 'none';
+  const kd = document.getElementById('kpiDifCard');
+  if (kd) kd.style.display = admin ? '' : 'none';
 }
 function erro(msg){ alert('Erro: ' + msg); }
 
@@ -439,7 +449,7 @@ function renderResumo(){
   document.getElementById('tbMotorista').innerHTML = Object.entries(por).map(([id,p])=>{
     const esp = p.km*taxaKm, d = p.v-esp;
     const cor = d>0.005?'text-red-400':d<-0.005?'text-emerald-400':'text-gray-400';
-    return `<tr><td class="font-semibold">${nomeMot(id)}</td><td>${p.n}</td><td>${fmtKm(p.km)}</td><td>${fmtR$(p.v)}</td><td class="text-gray-400">${fmtR$(esp)}</td><td class="${cor} font-bold">${d>=0?'+':''}${fmtR$(d)}</td></tr>`;
+    return `<tr><td class="font-semibold">${nomeMot(id)}</td><td>${p.n}</td><td>${fmtKm(p.km)}</td><td>${fmtR$(p.v)}</td><td class="text-gray-400 col-taxa">${fmtR$(esp)}</td><td class="${cor} font-bold col-taxa">${d>=0?'+':''}${fmtR$(d)}</td></tr>`;
   }).join('') || '<tr><td colspan="6" class="text-center text-gray-500 py-6">Sem lançamentos no período.</td></tr>';
 }
 function renderLanc(){
@@ -476,8 +486,10 @@ function abrirModalLanc(){
   document.getElementById('modalLanc').classList.remove('hidden');
 }
 function atualizaPrev(){
+  const el = document.getElementById('lancPrev');
+  if (!sessao || !sessao.admin) { el.textContent = ''; return; }
   const k = parseFloat(document.getElementById('lancKm').value||0);
-  document.getElementById('lancPrev').textContent = k>0 ? `Valor esperado pela taxa: ${fmtR$(k*taxaKm)}` : '';
+  el.textContent = k>0 ? `Valor esperado pela taxa: ${fmtR$(k*taxaKm)}` : '';
 }
 document.addEventListener('input', e=>{ if(['lancKm','lancValor'].includes(e.target.id)) atualizaPrev(); });
 async function salvarLanc(){
