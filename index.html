@@ -53,6 +53,7 @@
     <div class="tab" id="tab-mot" onclick="trocarAba('mot')">👥 Motoristas</div>
     <div class="tab hidden" id="tab-usr" onclick="trocarAba('usr')">🔑 Usuários</div>
     <div class="tab" id="tab-km" onclick="trocarAba('km')">🚗 KM</div>
+    <div class="tab hidden" id="tab-cli" onclick="trocarAba('cli')">📋 Clientes</div>
   </div>
 
   <!-- Filtros -->
@@ -143,6 +144,19 @@
       <tbody id="tbKm"></tbody>
     </table></div></div>
   </div>
+
+  <!-- ABA CLIENTES (admin) -->
+  <div id="aba-cli" class="hidden">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold">📋 Clientes</h2>
+      <button class="btn-red text-sm" onclick="abrirModalCli()">＋ Novo cliente</button>
+    </div>
+    <div class="card p-4"><div class="overflow-x-auto"><table>
+      <thead><tr><th>Nome</th><th>Status</th><th></th></tr></thead>
+      <tbody id="tbCli"></tbody>
+    </table></div></div>
+    <p class="text-xs text-gray-500 mt-2">A lista aparece para o funcionário escolher no registro de KM.</p>
+  </div>
 </div>
 
 </div><!-- /telaApp -->
@@ -157,7 +171,7 @@
         <div><label class="text-xs text-gray-400">Data</label><input type="date" id="kmData" class="w-full mt-1"></div>
         <div><label class="text-xs text-gray-400">Motorista</label><select id="kmMot" class="w-full mt-1"></select></div>
       </div>
-      <div><label class="text-xs text-gray-400">Cliente</label><input type="text" id="kmCliente" class="w-full mt-1" placeholder="Cliente atendido"></div>
+      <div><label class="text-xs text-gray-400">Cliente</label><select id="kmCliente" class="w-full mt-1"></select></div>
       <div><label class="text-xs text-gray-400">Odômetro do carro</label><input type="number" id="kmOdometro" step="0.1" min="0" class="w-full mt-1" placeholder="Ex: 45230">
         <div class="flex items-center gap-2 mt-2">
           <input type="file" id="odoFoto" accept="image/*" capture="environment" class="!p-1 text-xs" onchange="escolherFotoOdo(this)">
@@ -174,15 +188,37 @@
   </div>
 </div>
 
+<!-- Modal cliente (admin) -->
+<div id="modalCli" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+  <div class="card p-6 w-full max-w-sm">
+    <h3 class="font-bold text-lg mb-4">Novo cliente</h3>
+    <label class="text-xs text-gray-400">Nome do cliente</label>
+    <input type="text" id="cliNome" class="w-full mt-1" placeholder="Ex: HGV">
+    <div class="flex gap-2 mt-5 justify-end">
+      <button class="btn-ghost text-sm" onclick="fecharModal('modalCli')">Cancelar</button>
+      <button class="btn-red text-sm" onclick="salvarCli()">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal usuário (admin) -->
 <div id="modalUsr" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
   <div class="card p-6 w-full max-w-sm">
-    <h3 class="font-bold text-lg mb-4">Novo usuário</h3>
+    <h3 class="font-bold text-lg mb-4" id="modalUsrTitulo">Novo usuário</h3>
+    <input type="hidden" id="usrId">
     <div class="space-y-3">
       <div><label class="text-xs text-gray-400">Nome</label><input type="text" id="usrNome" class="w-full mt-1"></div>
       <div><label class="text-xs text-gray-400">Usuário (login)</label><input type="text" id="usrLogin" class="w-full mt-1"></div>
-      <div><label class="text-xs text-gray-400">Senha</label><input type="text" id="usrSenha" class="w-full mt-1"></div>
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="usrAdmin" style="width:auto"> Administrador</label>
+      <div><label class="text-xs text-gray-400">Senha</label><input type="text" id="usrSenha" class="w-full mt-1" placeholder="em branco mantém a atual (edição)"></div>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="usrAdmin" style="width:auto" onchange="document.getElementById('modBox').style.display=this.checked?'none':''"> Administrador</label>
+      <div id="modBox">
+        <div class="text-xs text-gray-400 mb-1">Módulos permitidos</div>
+        <label class="flex items-center gap-2 text-sm py-0.5"><input type="checkbox" class="modChk" value="dash" checked style="width:auto"> 📊 Resumo</label>
+        <label class="flex items-center gap-2 text-sm py-0.5"><input type="checkbox" class="modChk" value="lanc" checked style="width:auto"> 🧾 Lançamentos</label>
+        <label class="flex items-center gap-2 text-sm py-0.5"><input type="checkbox" class="modChk" value="mot" checked style="width:auto"> 👥 Motoristas</label>
+        <label class="flex items-center gap-2 text-sm py-0.5"><input type="checkbox" class="modChk" value="km" checked style="width:auto"> 🚗 KM</label>
+        <p class="text-xs text-gray-500 mt-1">Administradores veem todos os módulos.</p>
+      </div>
     </div>
     <div class="flex gap-2 mt-5 justify-end">
       <button class="btn-ghost text-sm" onclick="fecharModal('modalUsr')">Cancelar</button>
@@ -246,7 +282,8 @@ const SUPABASE_KEY = 'sb_publishable_e08JBryAm6Pxx3Pp4aVLag_V1yO4dYM';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let motoristas = [], repasses = [], taxaKm = 0.70;
-let usuarios = [], sessao = null, kms = [];
+let usuarios = [], sessao = null, kms = [], clientes = [];
+const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 let filtros = { de:null, ate:null, mot:'' };
 
 const fmtR$ = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -256,15 +293,17 @@ const uid = p => p + '-' + Date.now() + '-' + Math.floor(Math.random()*1e6);
 
 // ---------- carga ----------
 async function carregar() {
-  const [m, r, c, k] = await Promise.all([
+  const [m, r, c, k, cl] = await Promise.all([
     sb.from('motoristas').select('*').order('nome'),
     sb.from('repasses').select('*').order('data',{ascending:false}).limit(2000),
     sb.from('repasse_config').select('*').eq('id',1).maybeSingle(),
-    sb.from('km_registros').select('*').order('data',{ascending:false}).limit(2000)
+    sb.from('km_registros').select('*').order('data',{ascending:false}).limit(2000),
+    sb.from('clientes').select('*').order('nome')
   ]);
   if (m.error) return erro('motoristas: ' + m.error.message);
   if (r.error) return erro('repasses: ' + r.error.message);
   motoristas = m.data || []; repasses = r.data || []; kms = k.error ? [] : (k.data || []);
+  clientes = cl.error ? [] : (cl.data || []);
   if (c.data) taxaKm = parseFloat(c.data.taxa_km) || 0.70;
   document.getElementById('taxaLbl').textContent = 'R$ ' + taxaKm.toFixed(2).replace('.',',') + '/km';
   montarFiltros(); renderTudo();
@@ -288,6 +327,8 @@ function montarFiltros(){
   lm.innerHTML = motoristas.filter(m=>m.ativo).map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
   const kmm = document.getElementById('kmMot');
   kmm.innerHTML = motoristas.filter(m=>m.ativo).map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  const kc = document.getElementById('kmCliente');
+  kc.innerHTML = '<option value="">Selecione...</option>' + clientes.filter(c=>c.ativo).map(c=>`<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
 }
 function aplicarFiltros(){
   const m = document.getElementById('fMes').value, a = document.getElementById('fAno').value;
@@ -311,7 +352,7 @@ function repassesFiltrados(){
 const nomeMot = id => (motoristas.find(m=>m.id===id)||{}).nome || '—';
 
 // ---------- render ----------
-function renderTudo(){ renderResumo(); renderLanc(); renderMot(); renderKm(); }
+function renderTudo(){ renderResumo(); renderLanc(); renderMot(); renderKm(); renderCli(); }
 function renderResumo(){
   const rs = repassesFiltrados();
   const totV = rs.reduce((s,r)=>s+parseFloat(r.valor||0),0);
@@ -350,7 +391,8 @@ function renderMot(){
 
 // ---------- abas / modais ----------
 function trocarAba(q){
-  ['dash','lanc','mot','usr','km'].forEach(a=>{
+  if (sessao && sessao.modulos && !sessao.modulos.includes(q)) return;
+  ['dash','lanc','mot','usr','km','cli'].forEach(a=>{
     document.getElementById('aba-'+a).classList.toggle('hidden', a!==q);
     document.getElementById('tab-'+a).classList.toggle('active', a===q);
   });
@@ -409,6 +451,38 @@ async function excluirMot(id){
   if(!confirm('Excluir motorista?')) return;
   const {error} = await sb.from('motoristas').delete().eq('id',id);
   if(error) return erro(error.message); carregar();
+}
+
+// ---------- clientes (admin) ----------
+function renderCli(){
+  document.getElementById('tbCli').innerHTML = clientes.map(c =>
+    `<tr><td class="font-semibold">${esc(c.nome)}</td>
+     <td>${c.ativo ? '<span class="text-emerald-400">Ativo</span>' : '<span class="text-gray-500">Inativo</span>'}</td>
+     <td class="text-right whitespace-nowrap">
+       <button class="text-xs underline mr-2" onclick="toggleCli('${c.id}',${!c.ativo})">${c.ativo ? 'inativar' : 'ativar'}</button>
+       <button class="text-xs underline text-red-400" onclick="excluirCli('${c.id}')">excluir</button>
+     </td></tr>`
+  ).join('') || '<tr><td colspan="3" class="text-center text-gray-500 py-6">Nenhum cliente cadastrado.</td></tr>';
+}
+function abrirModalCli(){
+  document.getElementById('cliNome').value = '';
+  document.getElementById('modalCli').classList.remove('hidden');
+}
+async function salvarCli(){
+  const nome = document.getElementById('cliNome').value.trim();
+  if (!nome) return alert('Informe o nome do cliente.');
+  const { error } = await sb.from('clientes').insert({ id: uid('cli'), nome, ativo: true });
+  if (error) return erro(error.message);
+  fecharModal('modalCli'); carregar();
+}
+async function toggleCli(id, ativo){
+  const { error } = await sb.from('clientes').update({ ativo }).eq('id', id);
+  if (error) return erro(error.message); carregar();
+}
+async function excluirCli(id){
+  if (!confirm('Excluir este cliente? (os registros antigos mantêm o nome)')) return;
+  const { error } = await sb.from('clientes').delete().eq('id', id);
+  if (error) return erro(error.message); carregar();
 }
 function abrirConfig(){ document.getElementById('cfgTaxa').value=taxaKm.toFixed(2); document.getElementById('modalCfg').classList.remove('hidden'); }
 async function salvarCfg(){
@@ -629,13 +703,20 @@ async function criarAdmin(){
 }
 function entrar(u){
   sessao = u;
+  sessao.modulos = u.admin ? ['dash','lanc','mot','usr','km','cli']
+    : (u.modulos ? u.modulos.split(',').filter(Boolean) : ['dash','lanc','mot','km']);
   localStorage.setItem('nl_atend_sessao', JSON.stringify({ id: u.id }));
   document.getElementById('telaAuth').innerHTML = '';
   document.getElementById('telaApp').classList.remove('hidden');
   document.getElementById('userLbl').textContent = u.nome + (u.admin ? ' (admin)' : '');
   document.getElementById('tab-usr').classList.toggle('hidden', !u.admin);
+  document.getElementById('tab-cli').classList.toggle('hidden', !u.admin);
+  ['dash','lanc','mot','km'].forEach(t =>
+    document.getElementById('tab-'+t).classList.toggle('hidden', !sessao.modulos.includes(t)));
   document.getElementById('btnCfg').style.display = u.admin ? '' : 'none';
   carregar();
+  const first = ['dash','lanc','mot','km'].find(t => sessao.modulos.includes(t));
+  if (first) trocarAba(first);
 }
 function sair(){ localStorage.removeItem('nl_atend_sessao'); location.reload(); }
 
@@ -645,30 +726,63 @@ async function carregarUsuarios(){
   if (error) return erro(error.message);
   usuarios = data || []; renderUsr();
 }
+const MODULOS = [['dash','📊 Resumo'],['lanc','🧾 Lançamentos'],['mot','👥 Motoristas'],['km','🚗 KM']];
+function modsTxt(u){
+  if (u.admin) return '<span style="color:var(--nl-red)" class="font-bold">admin (tudo)</span>';
+  const ms = u.modulos ? u.modulos.split(',').filter(Boolean) : MODULOS.map(m=>m[0]);
+  return MODULOS.filter(m=>ms.includes(m[0])).map(m=>m[1]).join(' ') || '<span class="text-gray-500">nenhum</span>';
+}
 function renderUsr(){
   document.getElementById('tbUsr').innerHTML = usuarios.map(u =>
-    `<tr><td class="font-semibold">${u.nome}</td><td class="text-gray-400">${u.usuario}</td>
-     <td>${u.admin ? '<span style="color:var(--nl-red)" class="font-bold">admin</span>' : 'usuário'}</td>
+    `<tr><td class="font-semibold">${esc(u.nome)}</td><td class="text-gray-400">${esc(u.usuario)}</td>
+     <td class="text-xs">${modsTxt(u)}</td>
      <td>${u.ativo ? '<span class="text-emerald-400">Ativo</span>' : '<span class="text-gray-500">Inativo</span>'}</td>
      <td class="text-right whitespace-nowrap">
+       <button class="text-xs underline mr-2" onclick="editarUsr('${u.id}')">editar</button>
        <button class="text-xs underline mr-2" onclick="toggleUsr('${u.id}',${!u.ativo})">${u.ativo ? 'inativar' : 'ativar'}</button>
-       <button class="text-xs underline mr-2" onclick="resetarSenhaUsr('${u.id}')">nova senha</button>
        ${u.id === sessao.id ? '' : `<button class="text-xs underline text-red-400" onclick="excluirUsr('${u.id}')">excluir</button>`}
      </td></tr>`
   ).join('') || '<tr><td colspan="5" class="text-center text-gray-500 py-6">Nenhum usuário.</td></tr>';
 }
 function abrirModalUsr(){
+  document.getElementById('usrId').value = '';
+  document.getElementById('modalUsrTitulo').textContent = 'Novo usuário';
   document.getElementById('usrNome').value = ''; document.getElementById('usrLogin').value = '';
   document.getElementById('usrSenha').value = ''; document.getElementById('usrAdmin').checked = false;
+  document.getElementById('modBox').style.display = '';
+  document.querySelectorAll('.modChk').forEach(c => c.checked = true);
+  document.getElementById('modalUsr').classList.remove('hidden');
+}
+function editarUsr(id){
+  const u = usuarios.find(x => x.id === id); if (!u) return;
+  document.getElementById('usrId').value = id;
+  document.getElementById('modalUsrTitulo').textContent = 'Editar usuário';
+  document.getElementById('usrNome').value = u.nome; document.getElementById('usrLogin').value = u.usuario;
+  document.getElementById('usrSenha').value = ''; document.getElementById('usrAdmin').checked = !!u.admin;
+  document.getElementById('modBox').style.display = u.admin ? 'none' : '';
+  const ms = u.modulos ? u.modulos.split(',').filter(Boolean) : MODULOS.map(m=>m[0]);
+  document.querySelectorAll('.modChk').forEach(c => c.checked = ms.includes(c.value));
   document.getElementById('modalUsr').classList.remove('hidden');
 }
 async function salvarUsr(){
+  const id = document.getElementById('usrId').value;
   const nome = document.getElementById('usrNome').value.trim();
   const login = document.getElementById('usrLogin').value.trim();
   const senha = document.getElementById('usrSenha').value;
   const admin = document.getElementById('usrAdmin').checked;
-  if (!nome || !login || !senha) return alert('Preencha nome, usuário e senha.');
-  const { error } = await sb.from('atend_usuarios').insert({ id: uid('usr'), nome, usuario: login, senha, admin, ativo: true });
+  const mods = [...document.querySelectorAll('.modChk')].filter(c=>c.checked).map(c=>c.value);
+  if (!nome || !login) return alert('Preencha nome e usuário.');
+  if (!id && !senha) return alert('Defina uma senha.');
+  const modulos = (admin || mods.length === MODULOS.length) ? null : mods.join(',');
+  let error;
+  if (id) {
+    const upd = { nome, usuario: login, admin, modulos };
+    if (senha) upd.senha = senha;
+    if (id === sessao.id && !admin) return alert('Você não pode tirar seu próprio acesso de admin.');
+    error = (await sb.from('atend_usuarios').update(upd).eq('id', id)).error;
+  } else {
+    error = (await sb.from('atend_usuarios').insert({ id: uid('usr'), nome, usuario: login, senha, admin, ativo: true, modulos })).error;
+  }
   if (error) return erro(error.message.includes('duplicate') ? 'Este usuário já existe.' : error.message);
   fecharModal('modalUsr'); carregarUsuarios();
 }
