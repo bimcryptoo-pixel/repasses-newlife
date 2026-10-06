@@ -8,23 +8,37 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  :root { --nl-red:#e63946; }
-  body { background:#0f1115; color:#e8eaf0; font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; }
-  .card { background:#171a21; border:1px solid #262b36; border-radius:12px; }
+  :root {
+    --nl-red:#e63946;
+    --bg:#0f1115; --card:#171a21; --border:#262b36; --text:#e8eaf0;
+    --muted:#8b93a5; --input-bg:#10131a; --input-border:#2b303c;
+    --hover:#1a1e27; --rowline:#1c2029; --ghost:#22262f; --ghost-hover:#2b303c;
+  }
+  body.light {
+    --bg:#f1f2f4; --card:#ffffff; --border:#dde1e7; --text:#1c1f26;
+    --muted:#5d6675; --input-bg:#ffffff; --input-border:#c6ccd5;
+    --hover:#eef0f3; --rowline:#e8ecf0; --ghost:#e7eaee; --ghost-hover:#d9dee4;
+  }
+  body { background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; }
   .btn-red { background:var(--nl-red); color:#fff; font-weight:600; border-radius:8px; padding:8px 16px; }
   .btn-red:hover { filter:brightness(1.1); }
-  .btn-ghost { background:#22262f; color:#e8eaf0; border-radius:8px; padding:8px 16px; }
-  .btn-ghost:hover { background:#2b303c; }
-  input,select,textarea { background:#10131a !important; border:1px solid #2b303c !important; color:#e8eaf0 !important; border-radius:8px !important; padding:8px 12px !important; }
+  .btn-ghost { background:var(--ghost); color:var(--text); border-radius:8px; padding:8px 16px; }
+  .btn-ghost:hover { background:var(--ghost-hover); }
+  input,select,textarea { background:var(--input-bg) !important; border:1px solid var(--input-border) !important; color:var(--text) !important; border-radius:8px !important; padding:8px 12px !important; }
   input:focus,select:focus { border-color:var(--nl-red) !important; outline:none; }
+  input:disabled,select:disabled { opacity:.55; }
   table { width:100%; border-collapse:collapse; }
-  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#8b93a5; padding:10px 12px; border-bottom:1px solid #262b36; }
-  td { padding:10px 12px; border-bottom:1px solid #1c2029; font-size:14px; }
-  tr:hover td { background:#1a1e27; }
-  .tab { padding:10px 18px; border-radius:10px 10px 0 0; color:#8b93a5; font-weight:600; cursor:pointer; }
-  .tab.active { background:#171a21; color:#fff; border-bottom:3px solid var(--nl-red); }
+  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); padding:10px 12px; border-bottom:1px solid var(--border); }
+  td { padding:10px 12px; border-bottom:1px solid var(--rowline); font-size:14px; }
+  tr:hover td { background:var(--hover); }
+  .tab { padding:10px 18px; border-radius:10px 10px 0 0; color:var(--muted); font-weight:600; cursor:pointer; white-space:nowrap; }
+  .tab.active { background:var(--card); color:var(--text); border-bottom:3px solid var(--nl-red); }
   .modal-bg { background:rgba(0,0,0,.65); }
-  .tab { white-space:nowrap; }
+  body.light .text-gray-400 { color:#5d6675 !important; }
+  body.light .text-gray-500 { color:#6b7280 !important; }
+  body.light .text-gray-600 { color:#4b5563 !important; }
+  body.light .text-white { color:#1c1f26 !important; }
   @media (max-width:640px){
     .tab { padding:8px 12px; font-size:13px; }
     th, td { padding:8px 8px; font-size:13px; }
@@ -43,6 +57,7 @@
       <p class="text-sm text-gray-400">Controle de valor repassado × km reportado</p>
     </div>
     <div class="text-right text-xs text-gray-500">
+      <button id="btnTema" onclick="alternarTema()" class="text-lg" title="Trocar tema claro/escuro">🌙</button>
       <div id="userLbl" class="text-white font-semibold mb-1"></div>
       <div>Taxa de referência: <b id="taxaLbl" class="text-white">R$ 0,70/km</b></div>
       <button id="btnCfg" onclick="abrirConfig()" class="underline hover:text-white">alterar</button>
@@ -294,6 +309,19 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let motoristas = [], repasses = [], taxaKm = 0.70;
 let usuarios = [], sessao = null, kms = [], clientes = [];
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// ---------- tema claro/escuro ----------
+function aplicarTema(){
+  const t = localStorage.getItem('nl_atend_tema') || 'light';
+  document.body.classList.toggle('light', t === 'light');
+  const b = document.getElementById('btnTema');
+  if (b) b.textContent = t === 'light' ? '🌙' : '☀️';
+}
+function alternarTema(){
+  const atual = localStorage.getItem('nl_atend_tema') || 'light';
+  localStorage.setItem('nl_atend_tema', atual === 'light' ? 'dark' : 'light');
+  aplicarTema();
+}
 let filtros = { de:null, ate:null, mot:'' };
 
 const fmtR$ = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -842,6 +870,7 @@ async function excluirUsr(id){
   if (error) return erro(error.message); carregarUsuarios();
 }
 
+aplicarTema();
 initAuth();
 </script>
 </body>
