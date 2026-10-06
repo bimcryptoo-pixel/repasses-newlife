@@ -195,7 +195,12 @@
       <div><label class="text-xs text-gray-400">Odômetro do carro</label><input type="number" id="kmOdometro" step="1" min="0" class="w-full mt-1" placeholder="Ex: 45230">
         <div class="mt-2">
           <label class="text-xs text-gray-400">📎 Foto do odômetro <span class="text-red-400">(obrigatória)</span></label>
-          <input type="file" id="odoFoto" accept="image/*" class="!p-1 text-xs w-full min-w-0 mt-1" onchange="escolherFotoOdo(this)">
+          <div class="flex gap-2 mt-1">
+            <button type="button" class="btn-ghost text-xs flex-1" onclick="document.getElementById('odoFotoCam').click()">📷 Bater foto</button>
+            <button type="button" class="btn-ghost text-xs flex-1" onclick="document.getElementById('odoFotoArq').click()">📁 Escolher arquivo</button>
+          </div>
+          <input type="file" id="odoFotoCam" accept="image/*" capture="environment" class="hidden" onchange="escolherFotoOdo(this)">
+          <input type="file" id="odoFotoArq" accept="image/*" class="hidden" onchange="escolherFotoOdo(this)">
         </div>
         <input type="hidden" id="kmFotoUrl">
         <div id="odoFotoNome" class="text-xs text-gray-500 mt-1"></div>
@@ -267,7 +272,12 @@
       </div>
       <div><label class="text-xs text-gray-400">Observação</label><input type="text" id="lancObs" class="w-full mt-1" placeholder="opcional"></div>
       <div><label class="text-xs text-gray-400">📎 Comprovante de abastecimento (foto)</label>
-        <input type="file" id="lancFoto" accept="image/*" class="!p-1 text-xs w-full mt-1" onchange="mostrarPrevFoto('lancFoto','lancFotoPrev')">
+        <div class="flex gap-2 mt-1">
+          <button type="button" class="btn-ghost text-xs flex-1" onclick="document.getElementById('lancFotoCam').click()">📷 Bater foto</button>
+          <button type="button" class="btn-ghost text-xs flex-1" onclick="document.getElementById('lancFotoArq').click()">📁 Escolher arquivo</button>
+        </div>
+        <input type="file" id="lancFotoCam" accept="image/*" capture="environment" class="hidden" onchange="mostrarPrevFoto('lancFotoCam','lancFotoPrev')">
+        <input type="file" id="lancFotoArq" accept="image/*" class="hidden" onchange="mostrarPrevFoto('lancFotoArq','lancFotoPrev')">
         <input type="hidden" id="lancFotoUrl">
         <div id="lancFotoPrev" class="text-xs text-gray-500 mt-1"></div>
       </div>
@@ -479,7 +489,7 @@ function abrirModalLanc(){
   document.getElementById('lancId').value=''; document.getElementById('modalLancTitulo').textContent='Novo lançamento';
   document.getElementById('lancData').value=hojeISO(); document.getElementById('lancKm').value='';
   document.getElementById('lancValor').value=''; document.getElementById('lancObs').value=''; atualizaPrev();
-  document.getElementById('lancFoto').value=''; document.getElementById('lancFotoUrl').value='';
+  limparFotoInputs('lancFoto'); document.getElementById('lancFotoUrl').value='';
   document.getElementById('lancFotoPrev').innerHTML='';
   document.getElementById('modalLanc').classList.remove('hidden');
 }
@@ -494,7 +504,7 @@ async function salvarLanc(){
   const idAnt = document.getElementById('lancId').value;
   const id = idAnt || uid('rep');
   let fotoUrl = document.getElementById('lancFotoUrl').value || null;
-  const fotoFile = document.getElementById('lancFoto').files[0];
+  const fotoFile = fotoEscolhida('lancFoto');
   if (fotoFile) {
     try { fotoUrl = await uploadAnexo('repasses', id, fotoFile); }
     catch(e){ return erro('foto: ' + e.message); }
@@ -515,7 +525,7 @@ function editarLanc(id){
   document.getElementById('lancData').value=r.data; document.getElementById('lancMot').value=r.motorista_id;
   document.getElementById('lancKm').value=r.km; document.getElementById('lancValor').value=r.valor;
   document.getElementById('lancObs').value=r.observacao||''; atualizaPrev();
-  document.getElementById('lancFoto').value=''; document.getElementById('lancFotoUrl').value=r.foto_url||'';
+  limparFotoInputs('lancFoto'); document.getElementById('lancFotoUrl').value=r.foto_url||'';
   document.getElementById('lancFotoPrev').innerHTML = r.foto_url
     ? `📎 <button class="underline" onclick="verFoto('${r.foto_url}','Comprovante de abastecimento')">comprovante anexado</button> — escolha outra foto para substituir`
     : '';
@@ -591,6 +601,15 @@ const BUCKET_ANEXOS = 'atend-anexos';
 function mostrarPrevFoto(inputId, prevId){
   const f = document.getElementById(inputId).files[0];
   document.getElementById(prevId).innerHTML = f ? `📷 ${esc(f.name)} — será anexada 📎` : '';
+}
+// Retorna o arquivo escolhido em qualquer um dos dois botões (câmera ou arquivo)
+function fotoEscolhida(prefixo){
+  const cam = document.getElementById(prefixo + 'Cam'), arq = document.getElementById(prefixo + 'Arq');
+  return (cam && cam.files[0]) || (arq && arq.files[0]) || null;
+}
+function limparFotoInputs(prefixo){
+  const cam = document.getElementById(prefixo + 'Cam'), arq = document.getElementById(prefixo + 'Arq');
+  if (cam) cam.value = ''; if (arq) arq.value = '';
 }
 function comprimirImagem(file, maxDim = 1280, qualidade = 0.75){
   return new Promise((resolve, reject) => {
@@ -689,7 +708,7 @@ function abrirModalKm(){
   document.getElementById('kmObs').value = '';
   document.getElementById('kmFotoUrl').value = '';
   fotoOdo = null;
-  document.getElementById('odoFoto').value = '';
+  limparFotoInputs('odoFoto');
   document.getElementById('odoFotoNome').innerHTML = '';
   document.getElementById('modalKm').classList.remove('hidden');
 }
@@ -731,7 +750,7 @@ function editarKm(id){
   document.getElementById('kmObs').value = k.observacao || '';
   document.getElementById('kmFotoUrl').value = k.foto_url || '';
   fotoOdo = null;
-  document.getElementById('odoFoto').value = '';
+  limparFotoInputs('odoFoto');
   document.getElementById('odoFotoNome').innerHTML = k.foto_url
     ? `📎 <button class="underline" onclick="verFoto('${k.foto_url}','Foto do odômetro')">foto anexada</button> — escolha outra para substituir`
     : '';
